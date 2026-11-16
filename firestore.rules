@@ -9,9 +9,9 @@ service cloud.firestore {
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('activo', true) != false);
     }
 
-    // Margen, redondeo, rubros y productos editados: los lee cualquier cliente activo, solo el admin los cambia.
+    // Margen, redondeo, rubros y productos editados: los puede leer cualquiera (los invitados ven los precios), solo el admin los cambia.
     match /config/{doc} {
-      allow read: if isActive();
+      allow read: if true;
       allow write: if isAdmin();
     }
 
