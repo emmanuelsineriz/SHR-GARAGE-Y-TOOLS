@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signed() { return request.auth != null; }
+    function isAdmin() { return signed() && request.auth.token.email == 'admin@shr-garage.app'; }
+    function isActive() {
+      return isAdmin() || (signed() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('activo', true) != false);
+    }
+
+    // Margen, redondeo, rubros y productos editados: los lee cualquier cliente activo, solo el admin los cambia.
+    match /config/{doc} {
+      allow read: if isActive();
+      allow write: if isAdmin();
+    }
+
+    // Perfil de cada cliente. Se crea una sola vez al registrarse (sin margen especial ni bloqueo).
+    match /users/{uid} {
+      allow read: if isAdmin() || (signed() && request.auth.uid == uid);
+      allow create: if signed() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['usuario', 'nombre', 'tel', 'telKey', 'creado'])
+        && request.resource.data.usuario is string
+        && request.auth.token.email == request.resource.data.usuario + '@shr-garage.app'
+        && request.resource.data.usuario != 'admin'
+        && request.resource.data.nombre is string && request.resource.data.nombre.size() <= 80
+        && request.resource.data.tel is string && request.resource.data.tel.size() <= 30
+        && request.resource.data.telKey is string && request.resource.data.telKey.size() >= 8 && request.resource.data.telKey.size() <= 10;
+      allow update, delete: if isAdmin();
+    }
+
+    // Un documento por teléfono: si ya existe, el registro falla y el teléfono no se puede repetir.
+    match /tels/{tel} {
+      allow create: if signed()
+        && request.resource.data.keys().hasOnly(['uid'])
+        && request.resource.data.uid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.telKey == tel;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Pedidos de los clientes y compras que el admin les carga.
+    match /ventas/{id} {
+      allow read: if isAdmin() || (signed() && resource.data.uid == request.auth.uid);
+      allow create: if isAdmin() || (signed() && isActive()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.tipo == 'pedido'
+        && request.resource.data.estado == 'nuevo'
+        && request.resource.data.keys().hasOnly(['uid', 'usuario', 'nombre', 'tel', 'tipo', 'estado', 'fecha', 'items', 'total', 'nota']));
+      allow update, delete: if isAdmin();
+    }
+  }
+}
