@@ -90,6 +90,18 @@ def main():
     print(f'Leí {len(prods)} productos con precio ({seen} bloques).')
     if len(prods)<MIN_PRODUCTOS:falla(estado,f'Solo pude leer {len(prods)} productos: la página cambió o la clave no abrió el catálogo. No se actualizó nada.')
     prods.sort(key=lambda x:(x['r'],x['n'],x['c']))
+    # fecha de alta ('a'): un producto que no estaba en el catálogo anterior se marca con la fecha de hoy (para "Novedades").
+    # Los que ya estaban conservan su fecha (o ninguna). Si no hay catálogo anterior, no se marca ninguno.
+    hoy=time.strftime('%Y-%m-%d',time.gmtime())
+    try:
+        _ant=json.load(open(salida,encoding='utf-8')).get('productos',[])
+    except (ValueError,OSError):
+        _ant=[]
+    if _ant:
+        _alta={x['c']:x.get('a') for x in _ant}
+        for x in prods:
+            if x['c'] not in _alta:x['a']=hoy
+            elif _alta[x['c']]:x['a']=_alta[x['c']]
     nuevo={'productos':[{k:v for k,v in x.items() if k!='f'} for x in prods],'fotos':{x['c']:x['f'] for x in prods if x['f']>1}}
     ahora=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())
     if os.path.exists(salida):
