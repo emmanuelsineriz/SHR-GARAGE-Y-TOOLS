@@ -116,7 +116,7 @@ mark{background:#ffc40055;color:inherit;border-radius:3px;padding:0 1px}
 <div id="printHost" style="display:none"></div>
 
 <script>
-const APP_VERSION='2.1.0';
+const APP_VERSION='2.2.0';
 const WA_NUM='5491165366884',WA_TXT='Hola SHR Garage & Tools, quería consultar por un producto.';
 /* Configuración fija del negocio (igual en todos los equipos). Se completa al publicar la app. */
 const FIXED=null;
@@ -126,7 +126,7 @@ const EXTRA={"309":2,"424":2,"449":3,"589":2,"743":2,"956":2,"1048":3,"10316":2,
 const LS='ferreteria_ventas_v1';
 
 /* ---------- estado ---------- */
-const defaults=()=>({cfg:{nombre:'SHR Garage & Tools',margen:40,redondeo:10,margenRubro:{},fotos:true,vista:'fotos',limpiar:true,tel:'1165366884',pie:'¡Gracias por su compra!'},ov:{},custom:[],lista:null,ventas:[],nextTicket:1,cart:[]});
+const defaults=()=>({cfg:{nombre:'SHR Garage & Tools',margen:40,margenCliente:20,redondeo:10,margenRubro:{},fotos:true,vista:'fotos',limpiar:true,tel:'1165366884',pie:'¡Gracias por su compra!'},ov:{},custom:[],lista:null,ventas:[],nextTicket:1,cart:[]});
 let S=defaults();
 try{const raw=localStorage.getItem(LS);if(raw){const o=JSON.parse(raw);S=Object.assign(defaults(),o,{cfg:Object.assign(defaults().cfg,o.cfg||{})});}}catch(e){console.warn('localStorage',e)}
 if(S.cfg.ver!==APP_VERSION){if(S.cfg.ver===undefined||S.cfg.ver==='1.0.0'){S.cfg.fotos=true;S.cfg.vista='fotos';S.cfg.limpiar=true}if(S.cfg.nombre==='Mi Ferretería')S.cfg.nombre='SHR Garage & Tools';if(!S.cfg.tel)S.cfg.tel='1165366884';S.cfg.pw=null;S.cfg.ver=APP_VERSION}
@@ -182,7 +182,8 @@ function buildIndex(){
 }
 const getOv=c=>S.ov[c]||{};
 function rubroKey(p){return p.r||'(sin rubro)'}
-function margenDe(p){if(ROLE==='cliente'&&CLIENT&&CLIENT.margen!=null&&CLIENT.margen!=='')return +CLIENT.margen;const m=S.cfg.margenRubro[rubroKey(p)];return (m===undefined||m==='')?S.cfg.margen:+m}
+const margenClienteBase=()=>{const m=S.cfg.margenCliente;return(m===undefined||m===null||m==='')?null:+m};
+function margenDe(p){if(ROLE==='cliente'){const m=(CLIENT&&CLIENT.margen!=null&&CLIENT.margen!=='')?+CLIENT.margen:margenClienteBase();if(m!==null)return m}const m=S.cfg.margenRubro[rubroKey(p)];return (m===undefined||m==='')?S.cfg.margen:+m}
 function precio(p){const o=getOv(p.c);if(o.precio!=null)return o.precio;if(p.custom)return p.p;return round(p.p*(1+margenDe(p)/100),S.cfg.redondeo)}
 function costo(p){return p.p}
 function precioCon(p,m){const o=getOv(p.c);if(o.precio!=null)return o.precio;if(p.custom)return p.p;return round(p.p*(1+(m==null?margenDe(p):+m)/100),S.cfg.redondeo)}
@@ -337,7 +338,9 @@ function vConfig(){
   <label>Nombre</label><input id="cNombre" value="${esc(c.nombre)}"><label>WhatsApp / teléfono (para el ticket)</label><input id="cTel" value="${esc(c.tel)}" inputmode="tel"><label>Pie del ticket</label><input id="cPie" value="${esc(c.pie)}"></div>
   <div class="card"><h3 style="margin:0 0 6px">Precios de venta</h3>
   <p class="muted" style="margin:0">Los precios de lista se actualizan solos desde El Gasolero. El precio de venta = lista + margen.</p>
-  ${FIXED?`<div class="kpi" style="margin:10px 0"><small>Margen fijo</small><div>${c.margen}% · redondeo $${c.redondeo}</div>${Object.keys(c.margenRubro||{}).length?`<p class="muted" style="margin:6px 0 0;font-size:12px">Por rubro: ${Object.entries(c.margenRubro).map(([r,m])=>esc(r)+' '+m+'%').join(' · ')}</p>`:''}<p class="muted" style="margin:6px 0 0;font-size:12px">Se cambia publicando una versión nueva de la app.</p></div>`:`<label>Margen general (%)</label><input id="cMargen" type="number" inputmode="decimal" value="${c.margen}">
+  ${FIXED?`<div class="kpi" style="margin:10px 0"><small>Margen fijo</small><div>${c.margen}% · redondeo $${c.redondeo}</div>${Object.keys(c.margenRubro||{}).length?`<p class="muted" style="margin:6px 0 0;font-size:12px">Por rubro: ${Object.entries(c.margenRubro).map(([r,m])=>esc(r)+' '+m+'%').join(' · ')}</p>`:''}<p class="muted" style="margin:6px 0 0;font-size:12px">Se cambia publicando una versión nueva de la app.</p></div>`:`<label>Margen general (%) · para vos en el mostrador</label><input id="cMargen" type="number" inputmode="decimal" value="${c.margen}">
+  <label>Margen de los clientes registrados (%) · por defecto</label><input id="cMargenCli" type="number" inputmode="decimal" value="${c.margenCliente==null?'':c.margenCliente}" placeholder="vacío = igual al general">
+  <p class="muted" style="margin:4px 0 0;font-size:12px">Todo cliente nuevo ve los precios con este margen. A cada uno se lo podés cambiar en la pestaña Clientes.</p>
   <label>Redondear al múltiplo de ($)</label><select id="cRed">${[1,5,10,50,100].map(n=>`<option ${+c.redondeo===n?'selected':''}>${n}</option>`).join('')}</select>`}
   <label style="display:flex;gap:8px;align-items:center;text-transform:none"><input type="checkbox" id="cFotos" style="width:auto" ${c.fotos?'checked':''}> Mostrar fotos (se bajan de elgasolero.com)</label>
   <label style="display:flex;gap:8px;align-items:center;text-transform:none"><input type="checkbox" id="cLimp" style="width:auto" ${c.limpiar?'checked':''}> Sacar códigos internos del nombre (X3, Y1-D, ZZ…)</label>
@@ -355,7 +358,7 @@ function vConfig(){
 function saveCfg(){
   if(!isAdmin()){toast('Bloqueado');return}
   const c=S.cfg;c.nombre=$('#cNombre').value.trim()||'SHR Garage & Tools';c.tel=$('#cTel').value.trim();c.pie=$('#cPie').value;
-  if(!FIXED){c.margen=num($('#cMargen').value);c.redondeo=+$('#cRed').value}c.fotos=$('#cFotos').checked;c.limpiar=$('#cLimp').checked;buildIndex();
+  if(!FIXED){c.margen=num($('#cMargen').value);const mc=$('#cMargenCli').value.trim();c.margenCliente=mc===''?null:num(mc);c.redondeo=+$('#cRed').value}c.fotos=$('#cFotos').checked;c.limpiar=$('#cLimp').checked;buildIndex();
   save();toast('Guardado');render();
 }
 
@@ -369,7 +372,7 @@ function openCart(){
   modal(`<h2>Carrito</h2>${S.cart.map((l,i)=>`<div class="card"><div class="nm">${esc(l.n)}</div><div class="row" style="margin-top:6px"><div class="q"><button onclick="qty(${i},-1)">−</button><input type="number" inputmode="decimal" value="${l.q}" onchange="qtySet(${i},this.value)"><button onclick="qty(${i},1)">+</button></div><span style="flex:1"></span><input type="number" inputmode="decimal" value="${l.p}" style="width:100px" onchange="priceSet(${i},this.value)"><b style="width:86px;text-align:right">${money(l.q*l.p)}</b><button class="btn bad sm" onclick="rm(${i})">✕</button></div></div>`).join('')}
   <div class="grid2"><div><label>Descuento %</label><input id="desc" type="number" inputmode="decimal" value="${d||''}" placeholder="0" onchange="window.__desc=num(this.value);openCart()"></div><div><label>Pago</label><select id="pago">${['Efectivo','Transferencia','Débito','Crédito','Otro'].map(x=>`<option ${x===(window.__pago||'Efectivo')?'selected':''}>${x}</option>`).join('')}</select></div></div>
   <label>Cliente (opcional)</label><input id="cli" list="cliList" value="${esc(window.__cli||'')}" placeholder="Nombre o elegí un cliente registrado"><datalist id="cliList">${CLIENTES.map(c=>`<option value="${esc(c.nombre)} (@${esc(c.usuario)})">`).join('')}</datalist>
-  ${(()=>{const c=clienteDe(window.__cli);return c&&c.margen!=null&&c.margen!==''?`<button class="btn sec sm" style="margin-top:6px" onclick="aplicarPrecioCliente()">Aplicar precio de ${esc(c.usuario)} (${c.margen}%)</button>`:''})()}
+  ${(()=>{const c=clienteDe(window.__cli);if(!c)return'';const m=margenCli(c);return m==null?'':`<button class="btn sec sm" style="margin-top:6px" onclick="aplicarPrecioCliente()">Aplicar precio de ${esc(c.usuario)} (${m}%)</button>`})()}
   <div class="tot"><span>Total</span><span>${money(t.total)}</span></div>
   ${t.descMonto?`<div class="muted" style="margin-top:-8px">Descuento: −${money(t.descMonto)}</div>`:''}
   <div class="row" style="margin-top:12px"><button class="btn sec" onclick="clearCart()">Vaciar</button><button class="btn" style="flex:1" onclick="cobrar()">Cobrar ${money(t.total)}</button></div>`);
@@ -616,10 +619,10 @@ function startCliente(){
   setTimeout(()=>{if(!cfgReady&&ROLE==='cliente'){cfgReady=true;render()}},4000);
 }
 /* configuración compartida: margen, redondeo, margen por rubro, datos del negocio, productos editados */
-function cloudSub(){return JSON.parse(JSON.stringify({margen:S.cfg.margen,redondeo:S.cfg.redondeo,margenRubro:S.cfg.margenRubro||{},nombre:S.cfg.nombre,tel:S.cfg.tel,pie:S.cfg.pie,ov:S.ov||{},custom:S.custom||[]}))}
+function cloudSub(){return JSON.parse(JSON.stringify({margen:S.cfg.margen,margenCliente:S.cfg.margenCliente,redondeo:S.cfg.redondeo,margenRubro:S.cfg.margenRubro||{},nombre:S.cfg.nombre,tel:S.cfg.tel,pie:S.cfg.pie,ov:S.ov||{},custom:S.custom||[]}))}
 function applyCloud(d){
   SUPPRESS=true;
-  ['margen','redondeo','nombre','tel','pie'].forEach(k=>{if(d[k]!==undefined)S.cfg[k]=d[k]});
+  ['margen','margenCliente','redondeo','nombre','tel','pie'].forEach(k=>{if(d[k]!==undefined)S.cfg[k]=d[k]});
   S.cfg.margenRubro=d.margenRubro||{};S.ov=d.ov||{};S.custom=d.custom||[];
   lastSer=stable(cloudSub());buildIndex();save();SUPPRESS=false;
   if(!$('#modalHost').innerHTML&&!(ROLE==='admin'&&tab==='config'))render();
@@ -721,7 +724,8 @@ function vCuenta(){
 }
 /* ---------- administrador: clientes y pedidos ---------- */
 const clienteDe=txt=>{txt=String(txt||'').trim();return txt?CLIENTES.find(c=>`${c.nombre} (@${c.usuario})`===txt):null};
-function aplicarPrecioCliente(){const c=clienteDe(window.__cli);if(!c)return;S.cart.forEach(l=>{const p=find(l.c);if(p)l.p=precioCon(p,c.margen)});save();renderCartBar();openCart();toast('Precios del cliente aplicados')}
+const margenCli=c=>(c.margen!=null&&c.margen!=='')?+c.margen:margenClienteBase();
+function aplicarPrecioCliente(){const c=clienteDe(window.__cli);if(!c)return;S.cart.forEach(l=>{const p=find(l.c);if(p)l.p=precioCon(p,margenCli(c))});save();renderCartBar();openCart();toast('Precios del cliente aplicados')}
 function vClientes(){
   const nuevos=VENTAS_C.filter(v=>v.tipo==='pedido'&&v.estado==='nuevo');
   $('#main').innerHTML=`<h3 style="margin:6px 2px">Pedidos nuevos (${nuevos.length})</h3>`+(nuevos.length?nuevos.map(v=>`<div class="card"><div class="row"><b style="flex:1">${esc(v.nombre)} <span class="muted">@${esc(v.usuario)}</span></b><b style="color:var(--yel)">${money(v.total)}</b></div><div class="muted">${new Date(v.fecha).toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'})} · ${v.items.length} producto${v.items.length>1?'s':''}${v.nota?' · '+esc(v.nota):''}</div><div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="btn sm" onclick="verCompra('${esc(v.id)}')">Ver</button><button class="btn sec sm" onclick="setEstado('${esc(v.id)}','entregado')">Entregado</button><button class="btn bad sm" onclick="setEstado('${esc(v.id)}','cancelado')">Cancelar</button></div></div>`).join(''):'<div class="empty" style="padding:14px">No hay pedidos nuevos.</div>')+
@@ -732,13 +736,13 @@ function pintarCli(){
   const t=termsOf(qCli),L=CLIENTES.filter(c=>{const h=norm(c.nombre+' '+c.usuario+' '+c.tel);return t.every(x=>h.includes(x))});
   $('#cliList').innerHTML=L.length?L.map(c=>{const mine=VENTAS_C.filter(v=>v.uid===c.id&&v.estado!=='cancelado'&&v.estado!=='anulada'),tot=mine.reduce((a,v)=>a+(v.total||0),0),wa='https://wa.me/54'+(String(c.telKey||c.tel).replace(/\D/g,'').replace(/^(?!9)/,'9'));
     return `<div class="card"><div class="row"><b style="flex:1">${esc(c.nombre)}</b>${c.activo===false?'<span class="tag low">bloqueado</span>':''}</div><div class="muted">@${esc(c.usuario)} · ${esc(c.tel)} · ${mine.length} compra${mine.length===1?'':'s'} · ${money(tot)}</div>
-    <label>Precio especial: margen % (vacío = general ${S.cfg.margen}%)</label><div class="row"><input style="flex:1;min-width:0" id="m_${esc(c.id)}" type="number" inputmode="decimal" value="${c.margen==null?'':c.margen}" placeholder="${S.cfg.margen}"><button class="btn sm" style="flex:none" onclick="saveCliMargen('${esc(c.id)}')">Guardar</button></div>
+    <label>Precio especial: margen % (vacío = el de clientes, ${margenClienteBase()==null?S.cfg.margen:margenClienteBase()}%)</label><div class="row"><input style="flex:1;min-width:0" id="m_${esc(c.id)}" type="number" inputmode="decimal" value="${c.margen==null?'':c.margen}" placeholder="${margenClienteBase()==null?S.cfg.margen:margenClienteBase()}"><button class="btn sm" style="flex:none" onclick="saveCliMargen('${esc(c.id)}')">Guardar</button></div>
     <div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="btn sec sm" onclick="verComprasCli('${esc(c.id)}')">Compras</button><a style="text-decoration:none;display:inline-block;background:var(--panel2);color:var(--tx);border:1px solid var(--line);border-radius:var(--r);padding:6px 10px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em" target="_blank" rel="noopener" href="${wa}">WhatsApp</a><button class="btn sec sm" onclick="toggleCli('${esc(c.id)}')">${c.activo===false?'Desbloquear':'Bloquear'}</button><button class="btn bad sm" onclick="delCli('${esc(c.id)}')">Eliminar</button></div></div>`}).join(''):'<div class="empty">No hay clientes.</div>';
 }
 async function saveCliMargen(id){
   const el=$('#m_'+id),raw=el.value.trim(),v=raw===''?null:num(raw);
   if(v!==null&&(v<0||v>500)){toast('Margen entre 0 y 500');return}
-  try{await X.update('users/'+id,{margen:v});toast(v===null?'Usa el margen general':'Margen '+v+'% guardado')}catch(e){toast('No pude guardar')}
+  try{await X.update('users/'+id,{margen:v});toast(v===null?'Usa el margen de clientes':'Margen '+v+'% guardado')}catch(e){toast('No pude guardar')}
 }
 async function toggleCli(id){const c=CLIENTES.find(x=>x.id===id);if(!c)return;const nuevo=c.activo===false;if(!nuevo&&!confirm('¿Bloquear a '+c.nombre+'? No va a poder ver el catálogo.'))return;try{await X.update('users/'+id,{activo:nuevo});toast(nuevo?'Desbloqueado':'Bloqueado')}catch(e){toast('No pude guardar')}}
 async function delCli(id){
