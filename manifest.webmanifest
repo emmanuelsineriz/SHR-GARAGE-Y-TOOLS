@@ -1,0 +1,17 @@
+{
+  "name": "SHR Garage & Tools · Ventas",
+  "short_name": "SHR Ventas",
+  "description": "Catálogo y ventas de mostrador de SHR Garage & Tools",
+  "lang": "es-AR",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1b1b1d",
+  "theme_color": "#1b1b1d",
+  "icons": [
+    {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}
