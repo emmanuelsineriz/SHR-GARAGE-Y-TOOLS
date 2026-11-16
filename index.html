@@ -144,6 +144,10 @@ nav button.on b{animation:pop .35s ease}
 #toTop{position:fixed;right:14px;bottom:calc(130px + env(safe-area-inset-bottom));z-index:24;width:44px;height:44px;border-radius:50%;border:0;background:var(--yel);color:#1b1b1d;font-size:22px;font-weight:900;box-shadow:0 4px 14px #0009;opacity:0;pointer-events:none;transform:translateY(12px) scale(.8);transition:opacity .2s,transform .2s}
 #toTop.on{opacity:1;pointer-events:auto;transform:none}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+.rubsel{width:100%;display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:8px;background:var(--panel);color:var(--tx);border:1px solid var(--yel);border-radius:var(--r);padding:11px 14px;font:inherit;font-size:15px;text-align:left}
+.rubsel b{color:var(--yel)}.rubsel .car{color:var(--yel);font-size:18px}
+.rubit{width:100%;display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--panel);color:var(--tx);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin:6px 0;font:inherit;font-size:15px;text-align:left}
+.rubit small{color:var(--mut);font-size:13px}.rubit.on{background:var(--yel);color:#1b1b1d;border-color:var(--yel);font-weight:800}.rubit.on small{color:#1b1b1d99}
 @media print{body *{visibility:hidden}#printArea,#printArea *{visibility:visible}#printArea{position:absolute;left:0;top:0;width:100%}pre.ticket{font-size:12px}}
 </style>
 </head>
@@ -158,7 +162,7 @@ nav button.on b{animation:pop .35s ease}
 <div id="printHost" style="display:none"></div>
 
 <script>
-const APP_VERSION='2.7.1';
+const APP_VERSION='2.8.0';
 const WA_NUM='5491165366884',WA_TXT='Hola SHR Garage & Tools, quería consultar por un producto.';
 /* Configuración fija del negocio (igual en todos los equipos). Se completa al publicar la app. */
 const FIXED=null;
@@ -335,7 +339,13 @@ function card(p,terms,modo){
   return `<div class="gc">${ph}<div class="bd"><div class="nm">${hl(nombre(p),terms)}</div><div class="meta">${meta}${tags}</div><div class="bt"><span class="pr">${money(precio(p))}</span>${btn}</div></div></div>`;
 }
 function rubrosConteo(){const m={};INDEX.forEach(p=>{if(getOv(p.c).oculto)return;const k=rubroKey(p);m[k]=(m[k]||0)+1});return Object.entries(m).sort((a,b)=>b[1]-a[1])}
-function chipsHtml(sel,fn){return `<button class="chip ${sel?'':'on'}" onclick="${fn}('')">Todos</button>`+rubrosConteo().map(([r,n])=>`<button class="chip ${sel===r?'on':''}" data-r="${esc(r)}" onclick="${fn}(this.dataset.r)">${esc(r)}<small>${n}</small></button>`).join('')}
+function chipsHtml(sel,fn){return `<button class="rubsel" onclick="abrirRubros('${fn}')"><span>📂 Rubro: <b>${esc(sel||'Todos')}</b></span><span class="car">▾</span></button>`}
+function abrirRubros(fn){
+  window.__rubFn=fn;const sel=fn==='setRubV'?rubV:rubProd,rs=rubrosConteo(),tot=rs.reduce((a,[,n])=>a+n,0);
+  const it=(r,l,n)=>`<button class="rubit ${sel===r?'on':''}" data-r="${esc(r)}" onclick="pickRub(this.dataset.r)"><span>${esc(l)}</span><small>${n.toLocaleString('es-AR')}</small></button>`;
+  modal(`<h2>Elegí un rubro</h2>${it('','Todos',tot)}${rs.map(([r,n])=>it(r,r,n)).join('')}<button class="btn sec" style="width:100%;margin-top:10px" onclick="closeModal()">Cerrar</button>`);
+}
+function pickRub(r){closeModal();window[window.__rubFn](r)}
 function segHtml(){return `<div class="seg"><button class="${S.cfg.vista==='fotos'?'on':''}" onclick="setVista('fotos')">▦ Fotos</button><button class="${S.cfg.vista==='lista'?'on':''}" onclick="setVista('lista')">☰ Lista</button></div>`}
 function setVista(v){S.cfg.vista=v;save();render()}
 function listado(all,lim,terms,modo,moreFn){
