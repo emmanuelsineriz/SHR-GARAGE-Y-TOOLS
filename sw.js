@@ -1,7 +1,7 @@
 /* Service worker de SHR Garage & Tools · Ventas.
    El número de versión se reemplaza al compilar (APP_VERSION) para que cada
    versión nueva limpie la caché vieja. */
-const VERSION='2.8.0';
+const VERSION='2.8.1';
 const CACHE='shr-ventas-'+VERSION;
 const SHELL=['./','./index.html','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png','./icons/icon-512-maskable.png','./icons/icon-180.png'];
 
@@ -25,7 +25,7 @@ self.addEventListener('fetch',e=>{
     return;
   }
   if(req.mode==='navigate'){                          // la app: primero red (versión nueva), si no hay internet, caché
-    e.respondWith(fetch(req).then(r=>{const cp=r.clone();caches.open(CACHE).then(c=>c.put('./index.html',cp));return r}).catch(()=>caches.match('./index.html').then(r=>r||caches.match('./'))));
+    e.respondWith(fetch(req,{cache:'no-cache'}).then(r=>{const cp=r.clone();caches.open(CACHE).then(c=>c.put('./index.html',cp));return r}).catch(()=>caches.match('./index.html').then(r=>r||caches.match('./'))));
     return;
   }
   e.respondWith(caches.match(req).then(hit=>hit||fetch(req).then(r=>{if(r.ok){const cp=r.clone();caches.open(CACHE).then(c=>c.put(req,cp))}return r})));
