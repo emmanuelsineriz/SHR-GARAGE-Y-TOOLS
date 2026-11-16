@@ -151,6 +151,7 @@ nav button.on b{animation:pop .35s ease}
 .sec{margin:14px 2px 4px;font-size:16px;text-transform:uppercase;letter-spacing:.05em}.sec small{color:var(--mut);font-weight:400;margin-left:4px}
 .rubsel>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.novbtn small{opacity:.8;margin-left:2px}
 #todos{scroll-margin-top:200px}
+.warow.ok{border-left:4px solid var(--ok)}.warow.warn{border-left:4px solid var(--yel)}.warow.bad{border-left:4px solid var(--bad)}.waq{width:64px;text-align:center;padding:7px 4px}
 .tag.new{background:var(--yel);color:#1b1b1d;border-color:var(--yel);font-weight:800}
 .rubrow{display:flex;gap:8px;margin-top:8px}.rubrow .rubsel{margin-top:0;flex:1}
 .novbtn{flex:none;background:var(--panel);color:var(--yel);border:1px solid var(--yel);border-radius:var(--r);padding:0 14px;font:inherit;font-weight:800}.novbtn.on{background:var(--yel);color:#1b1b1d}
@@ -168,7 +169,7 @@ nav button.on b{animation:pop .35s ease}
 <div id="printHost" style="display:none"></div>
 
 <script>
-const APP_VERSION='2.10.2';
+const APP_VERSION='2.11.0';
 const WA_NUM='5491165366884',WA_TXT='Hola SHR Garage & Tools, quería consultar por un producto.';
 /* Configuración fija del negocio (igual en todos los equipos). Se completa al publicar la app. */
 const FIXED=null;
@@ -370,6 +371,7 @@ const termsOf=q=>norm(q).split(/\s+/).filter(Boolean);
 function vVender(){
   $('#main').innerHTML=`<div class="bar" id="barra"><div class="sbox"><input id="q" type="search" inputmode="search" enterkeyhint="search" placeholder="Buscar: nombre, marca o código…" value="${esc(qVender)}" autocomplete="off"><button class="x" aria-label="Borrar" onclick="qVender='';limV=40;vVender();$('#q').focus()">✕</button></div><div class="chips">${chipsHtml(rubV,'setRubV')}</div></div><div id="nov"></div><div class="tools"><span id="cnt"></span>${segHtml()}</div><div id="res"></div>`;
   if(ROLE==='invitado')$('#main').insertAdjacentHTML('afterbegin',`<div class="card guestbar" style="margin:0 0 22px;border-color:var(--yel)"><div class="row"><div style="flex:1;min-width:0"><b>👀 Estás como invitado</b><div class="muted" style="font-size:13px">Podés ver el catálogo y los precios. Para hacer pedidos, registrate.</div></div><button class="btn sm" onclick="salirInvitado('reg')">Registrarme</button></div></div>`);
+  if(ROLE==='admin')$('#main').insertAdjacentHTML('afterbegin',`<button class="btn" style="width:100%;margin:0 0 22px" onclick="abrirWa()">📲 Pedido de WhatsApp → carrito</button>`);
   const q=$('#q');q.oninput=()=>{qVender=q.value;limV=40;pintarRes()};pintarRes();
 }
 /* ---------- invitado: mira catálogo y precios, no pide ---------- */
@@ -387,6 +389,92 @@ function pedirRegistro(){
 }
 function setRubV(r){rubV=r;limV=40;vVender();window.scrollTo(0,0)}
 function irCatalogo(){const e=$('#todos');if(e)e.scrollIntoView({behavior:'smooth',block:'start'})}
+/* WA-MATCH-START */
+const WA_STOP=new Set(['c','p','de','con','para','x','en','a','y','el','la','un','una','los','las','por','del','al']);
+const WA_UNIT={gms:'gr',gm:'gr',grs:'gr',gramos:'gr',mt:'mts',metros:'mts',metro:'mts',cms:'cm'};
+function waTok(str){
+  let t=norm(str);
+  t=t.replace(/\bductape\b|\bduct tape\b|\bducktape\b/g,'duc tape').replace(/\bportalamparas?\b/g,'porta lampara').replace(/\bbuscapolos\b/g,'buscapolo').replace(/\bcermico\b/g,'ceramico');
+  if(/\bbici/.test(t))t=t.replace(/\blibras?\b/g,'linga');
+  t=t.replace(/(\d)\s*x\s*(\d)/g,'$1 $2').replace(/(\d)([a-z])/g,'$1 $2').replace(/([a-z])(\d)/g,'$1 $2').replace(/[^a-z0-9]+/g,' ').trim();
+  return t.split(' ').filter(w=>w&&!WA_STOP.has(w)).map(w=>{if(w.length>4&&w.endsWith('s'))w=w.slice(0,-1);return WA_UNIT[w]||w});
+}
+function waPT(p){return p._wt||(p._wt=waTok(p.n+' '+(p.r||'')))}
+function waScore(t,pt){let b=0;for(const w of pt){if(w===t)return 3;if(/[a-z]/.test(t)&&t.length>=2&&w.startsWith(t))b=Math.max(b,2)}return b}
+/* devuelve {sel, cands, quitadas} para una lista de palabras */
+function waMatch(T){
+  const rows=[];
+  for(const p of INDEX){if(getOv(p.c).oculto)continue;const pt=waPT(p);const m=T.map(t=>waScore(t,pt));if(m.some(x=>x>0))rows.push({p,m,pt})}
+  const hit=T.map((t,i)=>rows.some(r=>r.m[i]>0));
+  const U=T.map((_,i)=>i).filter(i=>hit[i]),quitadas=T.filter((_,i)=>!hit[i]);
+  if(!U.length)return{sel:null,cands:[],quitadas};
+  const rank=r=>({r,n:U.filter(i=>r.m[i]>0).length,sc:U.reduce((a,i)=>a+r.m[i],0)-r.pt.length*.05});
+  let L=rows.map(rank);
+  const full=L.filter(x=>x.n===U.length).sort((a,b)=>b.sc-a.sc);
+  if(full.length){
+    const c=full.slice(0,8).map(x=>x.r.p);
+    return{sel:(full.length===1&&!quitadas.length)?c[0]:null,cands:c,quitadas};
+  }
+  /* sin coincidencia total: ranking por palabras, las más específicas (poco frecuentes) pesan más */
+  const cnt=U.map(i=>rows.filter(r=>r.m[i]>0).length),wt=cnt.map(c=>Math.log(1+rows.length/c)),tot=wt.reduce((x,y)=>x+y,0);
+  const ws=r=>U.reduce((a,i,k)=>a+(r.m[i]>0?wt[k]*(r.m[i]===3?1:.8):0),0)-r.pt.length*.02;
+  const par=rows.map(r=>({p:r.p,w:ws(r)})).sort((a,b)=>b.w-a.w);
+  const top=par[0]?par[0].w:0;
+  const par2=top>=tot*.25?par.filter(x=>x.w>=top*.6).slice(0,8).map(x=>x.p):[];
+  return{sel:null,cands:par2,quitadas};
+}
+/* WA-MATCH-END */
+
+/* ---------- admin: pedido de WhatsApp -> carrito ---------- */
+let WA={raw:'',lines:[],ign:[]};
+function abrirWa(){
+  S.pick=S.pick||{};
+  modal(`<h2>📲 Pedido de WhatsApp</h2><p class="muted" style="margin:0 0 8px">Pegá el mensaje del cliente tal cual. Yo busco cada producto; lo que no esté claro (marca, medida) te lo muestro para que elijas.</p>
+  <textarea id="waTxt" rows="12" placeholder="2 cintas pasacables 15mts&#10;3 remachadoras eisenpro&#10;…">${esc(WA.raw)}</textarea>
+  <div class="row" style="margin-top:10px"><button class="btn sec" onclick="closeModal()">Cerrar</button><button class="btn" style="flex:1" onclick="waAnalizar()">Analizar pedido</button></div>`);
+}
+function waAnalizar(){
+  S.pick=S.pick||{};
+  WA.raw=($('#waTxt')||{}).value||'';WA.lines=[];WA.ign=[];
+  WA.raw.split(/\r?\n/).map(x=>x.trim()).filter(Boolean).forEach(line=>{
+    const m=line.match(/^(\d+)\s*(?:x|u\.?|un\.?|unid\w*|[.)-])?\s+(.+)$/i);
+    if(!m){WA.ign.push(line);return}
+    const q=Math.max(1,parseInt(m[1],10)||1),txt=m[2].replace(/[.\s]+$/,''),T=waTok(txt),key=T.join(' ');
+    const learned=S.pick[key]&&find(S.pick[key]);
+    const r=learned?{sel:learned,cands:[learned],quitadas:[]}:waMatch(T);
+    WA.lines.push({q,txt,key,sel:r.sel?r.sel.c:null,cands:r.cands,orig:r.cands,quitadas:r.quitadas,aprendido:!!learned,inc:!!r.sel,edit:false});
+  });
+  waRender();
+}
+function waRow(i){
+  const l=WA.lines[i],p=l.sel?find(l.sel):null,st=p?'ok':(l.cands.length?'warn':'bad'),ed=!p||l.edit;
+  const opts=l.cands.map(c=>`<option value="${esc(c.c)}" ${c.c===l.sel?'selected':''}>${esc(nombre(c)).slice(0,58)} · ${money(precio(c))}</option>`).join('');
+  return `<div class="card warow ${st}" id="wr${i}"><div class="row"><input type="checkbox" style="width:auto" ${l.inc&&p?'checked':''} ${p?'':'disabled'} onchange="waInc(${i},this.checked)"><input class="waq" type="number" min="1" inputmode="numeric" value="${l.q}" onchange="waQ(${i},this.value)"><div class="muted" style="flex:1;min-width:0;overflow-wrap:anywhere">${esc(l.txt)}</div></div>
+  ${p?`<div class="nm" style="margin-top:6px">✅ ${esc(nombre(p))} · <b style="color:var(--yel)">${money(precio(p))}</b>${l.aprendido?' <span class="tag">aprendido</span>':''} ${l.edit?'':`<button class="btn sec sm" onclick="waEdit(${i})">Cambiar</button>`}</div>`:`<div style="margin-top:6px;color:${l.cands.length?'var(--yel)':'var(--bad)'}">${l.cands.length?'⚠️ Elegí cuál es'+(l.quitadas.length?' <span class="muted">(no entendí: '+esc(l.quitadas.join(' '))+')</span>':''):'❌ No lo encontré, buscalo'}</div>`}
+  ${ed?`<select style="margin-top:6px" onchange="waPick(${i},this.value)"><option value="">${l.cands.length?'— elegí el producto —':'— sin resultados —'}</option>${opts}</select><input style="margin-top:6px" placeholder="Buscar otro producto…" oninput="waBuscar(${i},this.value)">`:''}</div>`;
+}
+function waFoot(){
+  const ok=WA.lines.filter(l=>l.inc&&l.sel).length,warn=WA.lines.filter(l=>!l.sel&&l.cands.length).length,bad=WA.lines.filter(l=>!l.sel&&!l.cands.length).length;
+  const e=$('#waFoot');if(e)e.innerHTML=`<span>✅ ${ok} listos</span> · <span style="color:var(--yel)">⚠️ ${warn} para elegir</span> · <span style="color:var(--bad)">❌ ${bad} sin encontrar</span>`;
+  const b=$('#waAdd');if(b){b.disabled=!ok;b.textContent=ok?`Agregar ${ok} al carrito`:'Nada para agregar'}
+}
+function waRender(){
+  modal(`<h2>📲 Pedido de WhatsApp</h2><div id="waFoot" class="muted" style="margin-bottom:8px"></div>${WA.lines.map((_,i)=>waRow(i)).join('')||'<div class="empty">No encontré renglones con cantidad.</div>'}
+  ${WA.ign.length?`<details class="muted" style="margin-top:8px"><summary>${WA.ign.length} línea(s) sin cantidad, ignoradas</summary>${WA.ign.map(esc).join('<br>')}</details>`:''}
+  <div class="row" style="margin-top:12px"><button class="btn sec" onclick="abrirWa()">← Editar mensaje</button><button class="btn" id="waAdd" style="flex:1" onclick="waAgregar()">Agregar al carrito</button></div>`);
+  waFoot();
+}
+function waRefresh(i){const e=$('#wr'+i);if(e)e.outerHTML=waRow(i);waFoot()}
+function waInc(i,v){WA.lines[i].inc=!!v;waFoot()}
+function waQ(i,v){WA.lines[i].q=Math.max(1,parseInt(v,10)||1)}
+function waEdit(i){WA.lines[i].edit=true;waRefresh(i)}
+function waPick(i,code){const l=WA.lines[i];l.sel=code||null;l.inc=!!code;l.edit=false;l.aprendido=false;if(code&&l.key){S.pick=S.pick||{};S.pick[l.key]=code;save()}waRefresh(i)}
+function waBuscar(i,v){const l=WA.lines[i];l.cands=v.trim().length>=2?searchProds(v,'',8):l.orig;const sel=$('#wr'+i+' select');if(sel)sel.innerHTML=`<option value="">— elegí el producto —</option>`+l.cands.map(c=>`<option value="${esc(c.c)}">${esc(nombre(c)).slice(0,58)} · ${money(precio(c))}</option>`).join('');waFoot()}
+function waAgregar(){
+  let n=0;
+  WA.lines.forEach(l=>{if(!l.inc||!l.sel)return;const p=find(l.sel);if(!p)return;const x=S.cart.find(y=>y.c===p.c);if(x)x.q+=l.q;else S.cart.push({c:p.c,n:nombre(p),q:l.q,p:precio(p),costo:costo(p)});n++});
+  save();closeModal();renderCartBar();toast(n+' producto'+(n===1?'':'s')+' al carrito');
+}
 function pintarRes(){
   /* inicio del catálogo (clientes e invitados): primero las novedades, después todo lo demás */
   const nv=$('#nov');
@@ -735,11 +823,11 @@ function startCliente(){
   setTimeout(()=>{if(!cfgReady&&ROLE==='cliente'){cfgReady=true;render()}},4000);
 }
 /* configuración compartida: margen, redondeo, margen por rubro, datos del negocio, productos editados */
-function cloudSub(){return JSON.parse(JSON.stringify({margen:S.cfg.margen,margenCliente:S.cfg.margenCliente,redondeo:S.cfg.redondeo,margenRubro:S.cfg.margenRubro||{},nombre:S.cfg.nombre,tel:S.cfg.tel,pie:S.cfg.pie,ov:S.ov||{},custom:S.custom||[]}))}
+function cloudSub(){return JSON.parse(JSON.stringify({margen:S.cfg.margen,margenCliente:S.cfg.margenCliente,redondeo:S.cfg.redondeo,margenRubro:S.cfg.margenRubro||{},nombre:S.cfg.nombre,tel:S.cfg.tel,pie:S.cfg.pie,ov:S.ov||{},custom:S.custom||[],pick:S.pick||{}}))}
 function applyCloud(d){
   SUPPRESS=true;
   ['margen','margenCliente','redondeo','nombre','tel','pie'].forEach(k=>{if(d[k]!==undefined)S.cfg[k]=d[k]});
-  S.cfg.margenRubro=d.margenRubro||{};S.ov=d.ov||{};S.custom=d.custom||[];
+  S.cfg.margenRubro=d.margenRubro||{};S.ov=d.ov||{};S.custom=d.custom||[];if(ROLE==='admin')S.pick=d.pick||S.pick||{};
   lastSer=stable(cloudSub());buildIndex();save();SUPPRESS=false;
   if(!$('#modalHost').innerHTML&&!(ROLE==='admin'&&tab==='config'))render();
 }
