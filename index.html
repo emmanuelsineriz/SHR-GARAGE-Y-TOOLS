@@ -158,7 +158,7 @@ nav button.on b{animation:pop .35s ease}
 <div id="printHost" style="display:none"></div>
 
 <script>
-const APP_VERSION='2.7.0';
+const APP_VERSION='2.7.1';
 const WA_NUM='5491165366884',WA_TXT='Hola SHR Garage & Tools, quería consultar por un producto.';
 /* Configuración fija del negocio (igual en todos los equipos). Se completa al publicar la app. */
 const FIXED=null;
@@ -225,7 +225,7 @@ function buildIndex(){
 const getOv=c=>S.ov[c]||{};
 function rubroKey(p){return p.r||'(sin rubro)'}
 const margenClienteBase=()=>{const m=S.cfg.margenCliente;return(m===undefined||m===null||m==='')?null:+m};
-function margenDe(p){if(ROLE==='cliente'){const m=(CLIENT&&CLIENT.margen!=null&&CLIENT.margen!=='')?+CLIENT.margen:margenClienteBase();if(m!==null)return m}const m=S.cfg.margenRubro[rubroKey(p)];return (m===undefined||m==='')?S.cfg.margen:+m}
+function margenDe(p){if(ROLE==='cliente'||ROLE==='invitado'){const m=(CLIENT&&CLIENT.margen!=null&&CLIENT.margen!=='')?+CLIENT.margen:margenClienteBase();if(m!==null)return m}const m=S.cfg.margenRubro[rubroKey(p)];return (m===undefined||m==='')?S.cfg.margen:+m}
 function precio(p){const o=getOv(p.c);if(o.precio!=null)return o.precio;if(p.custom)return p.p;return round(p.p*(1+margenDe(p)/100),S.cfg.redondeo)}
 function costo(p){return p.p}
 function precioCon(p,m){const o=getOv(p.c);if(o.precio!=null)return o.precio;if(p.custom)return p.p;return round(p.p*(1+(m==null?margenDe(p):+m)/100),S.cfg.redondeo)}
