@@ -116,7 +116,7 @@ mark{background:#ffc40055;color:inherit;border-radius:3px;padding:0 1px}
 <div id="printHost" style="display:none"></div>
 
 <script>
-const APP_VERSION='2.0.0';
+const APP_VERSION='2.1.0';
 const WA_NUM='5491165366884',WA_TXT='Hola SHR Garage & Tools, quería consultar por un producto.';
 /* Configuración fija del negocio (igual en todos los equipos). Se completa al publicar la app. */
 const FIXED=null;
@@ -172,7 +172,8 @@ const norm=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''
 const num=v=>{const n=parseFloat(String(v).replace(/\./g,'').replace(',','.'));return isNaN(n)?0:n};
 function toast(t){const e=document.createElement('div');e.className='toast';e.textContent=t;document.body.appendChild(e);setTimeout(()=>e.remove(),2200)}
 function round(v,step){step=+step||1;return Math.round(v/step)*step}
-const baseList=()=>S.lista||BASE;
+let CAT=null,CATINFO=null,CATEST=null;
+const baseList=()=>S.lista||CAT||BASE;
 let INDEX=null;const COL=new Intl.Collator('es');
 function buildIndex(){
   const all=baseList().map(p=>({c:String(p.c),n:p.n,r:p.r||'',p:p.p,b:p.b||null,custom:false})).concat(S.custom.map(p=>({...p,c:String(p.c),custom:true})));
@@ -335,13 +336,14 @@ function vConfig(){
   $('#main').innerHTML=`${seguridadCard()}<div class="card"><h3 style="margin:0 0 6px">Negocio</h3>
   <label>Nombre</label><input id="cNombre" value="${esc(c.nombre)}"><label>WhatsApp / teléfono (para el ticket)</label><input id="cTel" value="${esc(c.tel)}" inputmode="tel"><label>Pie del ticket</label><input id="cPie" value="${esc(c.pie)}"></div>
   <div class="card"><h3 style="margin:0 0 6px">Precios de venta</h3>
-  <p class="muted" style="margin:0">Los precios cargados son los de lista de El Gasolero. El precio de venta = lista + margen.</p>
+  <p class="muted" style="margin:0">Los precios de lista se actualizan solos desde El Gasolero. El precio de venta = lista + margen.</p>
   ${FIXED?`<div class="kpi" style="margin:10px 0"><small>Margen fijo</small><div>${c.margen}% · redondeo $${c.redondeo}</div>${Object.keys(c.margenRubro||{}).length?`<p class="muted" style="margin:6px 0 0;font-size:12px">Por rubro: ${Object.entries(c.margenRubro).map(([r,m])=>esc(r)+' '+m+'%').join(' · ')}</p>`:''}<p class="muted" style="margin:6px 0 0;font-size:12px">Se cambia publicando una versión nueva de la app.</p></div>`:`<label>Margen general (%)</label><input id="cMargen" type="number" inputmode="decimal" value="${c.margen}">
   <label>Redondear al múltiplo de ($)</label><select id="cRed">${[1,5,10,50,100].map(n=>`<option ${+c.redondeo===n?'selected':''}>${n}</option>`).join('')}</select>`}
   <label style="display:flex;gap:8px;align-items:center;text-transform:none"><input type="checkbox" id="cFotos" style="width:auto" ${c.fotos?'checked':''}> Mostrar fotos (se bajan de elgasolero.com)</label>
   <label style="display:flex;gap:8px;align-items:center;text-transform:none"><input type="checkbox" id="cLimp" style="width:auto" ${c.limpiar?'checked':''}> Sacar códigos internos del nombre (X3, Y1-D, ZZ…)</label>
   <button class="btn" style="margin-top:12px;width:100%" onclick="saveCfg()">Guardar</button>
   ${FIXED?'':'<button class="btn sec" style="margin-top:8px;width:100%" onclick="openMargenes()">Margen por rubro</button>'}</div>
+  ${catalogoCard()}
   ${installCard()}
   <div class="card"><h3 style="margin:0 0 6px">Datos</h3>
   <button class="btn sec" style="width:100%" onclick="backup()">Descargar backup (JSON)</button>
@@ -750,7 +752,35 @@ function verComprasCli(id){
   modal(`<h2>Compras de ${esc(c?c.nombre:'')}</h2>${L.length?L.map(v=>`<div class="card" onclick="verCompra('${esc(v.id)}')"><div class="row"><b style="flex:1">${new Date(v.fecha).toLocaleDateString('es-AR')}</b><span class="tag">${esc(estTxt(v))}</span><b style="color:var(--yel)">${money(v.total)}</b></div></div>`).join(''):'<div class="empty">Sin compras.</div>'}<div class="row" style="margin-top:10px"><button class="btn sec" style="flex:1" onclick="closeModal()">Cerrar</button></div>`);
 }
 
-buildIndex();render();fbBoot();
+/* ---------- catálogo actualizado solo desde elgasolero.com (lo baja un robot de GitHub cada día) ---------- */
+async function cargarCatalogo(manual){
+  if(!location.protocol.startsWith('http'))return;
+  let cambio=false,hubo=false;
+  try{
+    const r=await fetch('catalogo.json',{cache:'no-cache'});
+    if(r.ok){const j=await r.json();
+      if(j&&Array.isArray(j.productos)&&j.productos.length>=1500){
+        const nuevo=j.actualizado||'';
+        if(!CATINFO||nuevo!==CATINFO.actualizado||manual){hubo=!CATINFO?!!(CAT||j.actualizado):nuevo!==CATINFO.actualizado;CAT=j.productos;Object.keys(j.fotos||{}).forEach(k=>EXTRA[k]=j.fotos[k]);CATINFO={actualizado:j.actualizado||null};cambio=true}
+      }}
+  }catch(e){}
+  try{const r=await fetch('estado.json',{cache:'no-cache'});if(r.ok)CATEST=await r.json()}catch(e){}
+  if(cambio)buildIndex();
+  if(ROLE!=='init'&&!$('#modalHost').innerHTML&&(manual||(cambio&&!(ROLE==='admin'&&tab==='config'))))render();
+  return hubo;
+}
+const fmtF=iso=>iso?new Date(iso).toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'}):null;
+function catalogoCard(){
+  const e=CATEST,act=CATINFO&&CATINFO.actualizado;
+  const dias=e&&e.verificado?Math.floor((Date.now()-new Date(e.verificado))/864e5):null;
+  let estado;
+  if(e&&e.ok===false)estado=`<div style="background:#4a1d1d;border:1px solid var(--bad);border-radius:8px;padding:10px;margin:8px 0"><b>⚠️ No se pudo actualizar</b><div class="muted" style="margin-top:4px">${esc(e.error||'')}</div><div class="muted" style="margin-top:4px">Se sigue usando el último catálogo bueno. Último intento: ${fmtF(e.fecha)||'—'}</div></div>`;
+  else if(dias!==null&&dias>=3)estado=`<div style="background:#4a3b12;border:1px solid var(--yel);border-radius:8px;padding:10px;margin:8px 0"><b>⚠️ Hace ${dias} días que no se verifica</b><div class="muted">Revisá en GitHub que el robot siga corriendo.</div></div>`;
+  else if(e&&e.ok)estado=`<p style="margin:6px 0">✅ Verificado con elgasolero.com: <b>${fmtF(e.verificado)}</b></p>`;
+  else estado='<p class="muted" style="margin:6px 0">Todavía no hubo una actualización automática. Se usa el catálogo incluido en la app.</p>';
+  return `<div class="card"><h3 style="margin:0 0 6px">📦 Catálogo de elgasolero.com</h3>${estado}<p class="muted" style="margin:0 0 10px">Precios de lista cambiados por última vez: ${act?'<b>'+fmtF(act)+'</b>':'catálogo incluido en la app'} · ${INDEX.filter(p=>!p.custom).length.toLocaleString('es-AR')} productos. El robot revisa la página todos los días y, si hay cambios, la app se actualiza sola con tu margen.</p><button class="btn sec sm" onclick="cargarCatalogo(true).then(c=>toast(c?'Catálogo actualizado':'Ya tenés lo último'))">Buscar actualización ahora</button></div>`;
+}
+buildIndex();render();fbBoot();cargarCatalogo();setInterval(()=>cargarCatalogo(),30*60*1000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)cargarCatalogo()});
 /* ---------- app instalable (PWA) ---------- */
 let deferredInstall=null;
 const isHttp=location.protocol.startsWith('http');
