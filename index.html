@@ -149,6 +149,8 @@ nav button.on b{animation:pop .35s ease}
 .rubit{width:100%;display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--panel);color:var(--tx);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin:6px 0;font:inherit;font-size:15px;text-align:left}
 .rubit small{color:var(--mut);font-size:13px}.rubit.on{background:var(--yel);color:#1b1b1d;border-color:var(--yel);font-weight:800}.rubit.on small{color:#1b1b1d99}
 .sec{margin:14px 2px 4px;font-size:16px;text-transform:uppercase;letter-spacing:.05em}.sec small{color:var(--mut);font-weight:400;margin-left:4px}
+.rubsel>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.novbtn small{opacity:.8;margin-left:2px}
+#todos{scroll-margin-top:200px}
 .tag.new{background:var(--yel);color:#1b1b1d;border-color:var(--yel);font-weight:800}
 .rubrow{display:flex;gap:8px;margin-top:8px}.rubrow .rubsel{margin-top:0;flex:1}
 .novbtn{flex:none;background:var(--panel);color:var(--yel);border:1px solid var(--yel);border-radius:var(--r);padding:0 14px;font:inherit;font-weight:800}.novbtn.on{background:var(--yel);color:#1b1b1d}
@@ -166,7 +168,7 @@ nav button.on b{animation:pop .35s ease}
 <div id="printHost" style="display:none"></div>
 
 <script>
-const APP_VERSION='2.10.1';
+const APP_VERSION='2.10.2';
 const WA_NUM='5491165366884',WA_TXT='Hola SHR Garage & Tools, quería consultar por un producto.';
 /* Configuración fija del negocio (igual en todos los equipos). Se completa al publicar la app. */
 const FIXED=null;
@@ -234,7 +236,8 @@ const getOv=c=>S.ov[c]||{};
 function rubroKey(p){return p.r||'(sin rubro)'}
 /* novedades: productos que entraron al catálogo en los últimos NOV_DIAS días */
 const NOV_DIAS=14,NOV='__nuevos';
-const isNuevo=p=>!!p.a&&(Date.now()-Date.parse(p.a+'T00:00:00Z'))/864e5<=NOV_DIAS;
+const altaMs=p=>Date.parse(p.a.length>10?p.a:p.a+'T00:00:00Z');
+const isNuevo=p=>!!p.a&&(Date.now()-altaMs(p))/864e5<=NOV_DIAS;
 const nNuevos=()=>INDEX.filter(p=>!p.custom&&isNuevo(p)&&!getOv(p.c).oculto).length;
 const margenClienteBase=()=>{const m=S.cfg.margenCliente;return(m===undefined||m===null||m==='')?null:+m};
 function margenDe(p){if(ROLE==='cliente'||ROLE==='invitado'){const m=(CLIENT&&CLIENT.margen!=null&&CLIENT.margen!=='')?+CLIENT.margen:margenClienteBase();if(m!==null)return m}const m=S.cfg.margenRubro[rubroKey(p)];return (m===undefined||m==='')?S.cfg.margen:+m}
@@ -267,7 +270,7 @@ function searchProds(q,rub,limit){
   for(const p of INDEX){
     if(getOv(p.c).oculto)continue;
     if(rub===NOV){if(!isNuevo(p))continue}else if(rub&&rubroKey(p)!==rub)continue;
-    if(!t.length){out.push({p,s:rub===NOV?Date.parse(p.a):0});continue}
+    if(!t.length){out.push({p,s:rub===NOV?altaMs(p):0});continue}
     let ok=true,sc=0;const nm=norm(nombre(p));
     for(const w of t){
       if(!p._s.includes(w)&&!nm.includes(w)){ok=false;break}
@@ -347,14 +350,14 @@ function card(p,terms,modo,grande){
   return `<div class="gc">${ph}<div class="bd"><div class="nm">${hl(nombre(p),terms)}</div><div class="meta">${meta}${tags}</div><div class="bt"><span class="pr">${money(precio(p))}</span>${btn}</div></div></div>`;
 }
 function rubrosConteo(){const m={};INDEX.forEach(p=>{if(getOv(p.c).oculto)return;const k=rubroKey(p);m[k]=(m[k]||0)+1});return Object.entries(m).sort((a,b)=>b[1]-a[1])}
-function chipsHtml(sel,fn){const nn=nNuevos();return `<div class="rubrow"><button class="rubsel" onclick="abrirRubros('${fn}')"><span>📂 Rubro: <b>${esc(sel===NOV?'🆕 Novedades':sel||'Todos')}</b></span><span class="car">▾</span></button>${nn?`<button class="novbtn ${sel===NOV?'on':''}" onclick="${fn}('${sel===NOV?'':NOV}')">🆕 ${nn}</button>`:''}</div>`}
+function chipsHtml(sel,fn){const nn=nNuevos();return `<div class="rubrow"><button class="rubsel" onclick="abrirRubros('${fn}')"><span>📂 Rubro: <b>${esc(sel===NOV?'🆕 Novedades':sel||'Todos')}</b></span><span class="car">▾</span></button>${nn?`<button class="novbtn ${sel===NOV?'on':''}" onclick="${fn}('${sel===NOV?'':NOV}')">🆕 Novedades <small>${nn}</small></button>`:''}</div>`}
 function abrirRubros(fn){
   window.__rubFn=fn;const sel=fn==='setRubV'?rubV:rubProd,rs=rubrosConteo(),tot=rs.reduce((a,[,n])=>a+n,0);
   const it=(r,l,n)=>`<button class="rubit ${sel===r?'on':''}" data-r="${esc(r)}" onclick="pickRub(this.dataset.r)"><span>${esc(l)}</span><small>${n.toLocaleString('es-AR')}</small></button>`;
   const nn=nNuevos();
   modal(`<h2>Elegí un rubro</h2>${it('','Todos',tot)}${nn?it(NOV,'🆕 Novedades',nn):''}${rs.map(([r,n])=>it(r,r,n)).join('')}<button class="btn sec" style="width:100%;margin-top:10px" onclick="closeModal()">Cerrar</button>`);
 }
-function pickRub(r){closeModal();window[window.__rubFn](r)}
+function pickRub(r){closeModal();window[window.__rubFn](r);if(r===''&&window.__rubFn==='setRubV')setTimeout(irCatalogo,60)}
 function segHtml(){return `<div class="seg"><button class="${S.cfg.vista==='fotos'?'on':''}" onclick="setVista('fotos')">▦ Fotos</button><button class="${S.cfg.vista==='lista'?'on':''}" onclick="setVista('lista')">☰ Lista</button></div>`}
 function setVista(v){S.cfg.vista=v;save();render()}
 function listado(all,lim,terms,modo,moreFn){
@@ -365,7 +368,7 @@ function listado(all,lim,terms,modo,moreFn){
 }
 const termsOf=q=>norm(q).split(/\s+/).filter(Boolean);
 function vVender(){
-  $('#main').innerHTML=`<div id="nov"></div><div class="bar" id="barra"><div class="sbox"><input id="q" type="search" inputmode="search" enterkeyhint="search" placeholder="Buscar: nombre, marca o código…" value="${esc(qVender)}" autocomplete="off"><button class="x" aria-label="Borrar" onclick="qVender='';limV=40;vVender();$('#q').focus()">✕</button></div><div class="chips">${chipsHtml(rubV,'setRubV')}</div></div><div class="tools"><span id="cnt"></span>${segHtml()}</div><div id="res"></div>`;
+  $('#main').innerHTML=`<div class="bar" id="barra"><div class="sbox"><input id="q" type="search" inputmode="search" enterkeyhint="search" placeholder="Buscar: nombre, marca o código…" value="${esc(qVender)}" autocomplete="off"><button class="x" aria-label="Borrar" onclick="qVender='';limV=40;vVender();$('#q').focus()">✕</button></div><div class="chips">${chipsHtml(rubV,'setRubV')}</div></div><div id="nov"></div><div class="tools"><span id="cnt"></span>${segHtml()}</div><div id="res"></div>`;
   if(ROLE==='invitado')$('#main').insertAdjacentHTML('afterbegin',`<div class="card guestbar" style="margin:0 0 22px;border-color:var(--yel)"><div class="row"><div style="flex:1;min-width:0"><b>👀 Estás como invitado</b><div class="muted" style="font-size:13px">Podés ver el catálogo y los precios. Para hacer pedidos, registrate.</div></div><button class="btn sm" onclick="salirInvitado('reg')">Registrarme</button></div></div>`);
   const q=$('#q');q.oninput=()=>{qVender=q.value;limV=40;pintarRes()};pintarRes();
 }
@@ -383,13 +386,13 @@ function pedirRegistro(){
   <button class="btn sec" style="width:100%" onclick="closeModal()">Seguir mirando</button>`);
 }
 function setRubV(r){rubV=r;limV=40;vVender();window.scrollTo(0,0)}
-function irCatalogo(){const b=$('#barra');if(b){window.scrollTo({top:b.getBoundingClientRect().top+scrollY-(parseInt(getComputedStyle(document.documentElement).getPropertyValue('--hh'))||68)+12,behavior:'smooth'});const q=$('#q');if(q)setTimeout(()=>q.focus({preventScroll:true}),400)}}
+function irCatalogo(){const e=$('#todos');if(e)e.scrollIntoView({behavior:'smooth',block:'start'})}
 function pintarRes(){
   /* inicio del catálogo (clientes e invitados): primero las novedades, después todo lo demás */
   const nv=$('#nov');
   if(nv){
     const novs=(ROLE!=='admin'&&!qVender.trim()&&!rubV)?searchProds('',NOV,0):[];
-    nv.innerHTML=novs.length?`<h3 class="sec" style="margin-top:2px">🆕 Novedades <small>${novs.length}</small></h3><div class="grid">${novs.slice(0,24).map(p=>card(p,[],'add',true)).join('')}</div>${novs.length>24?`<button class="btn sec" style="width:100%;margin:12px 0 0" onclick="setRubV('${NOV}')">Ver todas las novedades (${novs.length})</button>`:''}<button class="btn" style="width:100%;margin:16px 0 22px" onclick="irCatalogo()">🔎 Ver todo el catálogo</button>`:'';
+    nv.innerHTML=novs.length?`<h3 class="sec" style="margin-top:2px">🆕 Novedades <small>${novs.length}</small></h3><div class="grid">${novs.slice(0,24).map(p=>card(p,[],'add',true)).join('')}</div>${novs.length>24?`<button class="btn sec" style="width:100%;margin:12px 0 0" onclick="setRubV('${NOV}')">Ver todas las novedades (${novs.length})</button>`:''}<button class="btn" style="width:100%;margin:16px 0 8px" onclick="irCatalogo()">Ver todos los productos ↓</button><h3 class="sec" id="todos" style="margin-top:18px">Todos los productos</h3>`:'';
   }
   const all=searchProds(qVender,rubV,0);
   $('#cnt').textContent=(qVender.trim()||rubV)?all.length.toLocaleString('es-AR')+' resultado'+(all.length===1?'':'s'):INDEX.length.toLocaleString('es-AR')+' productos';
