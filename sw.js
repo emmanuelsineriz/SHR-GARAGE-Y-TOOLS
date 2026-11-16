@@ -1,7 +1,7 @@
 /* Service worker de SHR Garage & Tools · Ventas.
    El número de versión se reemplaza al compilar (APP_VERSION) para que cada
    versión nueva limpie la caché vieja. */
-const VERSION='2.5.0';
+const VERSION='2.6.0';
 const CACHE='shr-ventas-'+VERSION;
 const SHELL=['./','./index.html','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png','./icons/icon-512-maskable.png','./icons/icon-180.png'];
 
