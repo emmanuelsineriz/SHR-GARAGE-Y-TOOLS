@@ -53,7 +53,9 @@ service cloud.firestore {
         && resource.data.estado == 'nuevo'
         && request.resource.data.estado in ['nuevo', 'cancelado']
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['items', 'total', 'nota', 'editado', 'editadoPor', 'estado']));
-      allow delete: if isAdmin();
+      // El cliente puede borrar sus pedidos que todavía no se entregaron (nuevos o cancelados); el admin cualquiera.
+      allow delete: if isAdmin() || (signed() && resource.data.uid == request.auth.uid
+        && resource.data.tipo == 'pedido' && resource.data.estado in ['nuevo', 'cancelado']);
     }
   }
 }

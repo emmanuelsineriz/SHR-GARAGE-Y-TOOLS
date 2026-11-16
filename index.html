@@ -134,7 +134,7 @@ mark{background:#ffc40055;color:inherit;border-radius:3px;padding:0 1px}
 <div id="printHost" style="display:none"></div>
 
 <script>
-const APP_VERSION='2.4.0';
+const APP_VERSION='2.4.1';
 const WA_NUM='5491165366884',WA_TXT='Hola SHR Garage & Tools, quería consultar por un producto.';
 /* Configuración fija del negocio (igual en todos los equipos). Se completa al publicar la app. */
 const FIXED=null;
@@ -383,6 +383,7 @@ function saveCfg(){
 /* ---------- modales ---------- */
 function modal(html){$('#modalHost').innerHTML=`<div class="modal" onclick="if(event.target===this)closeModal()"><div>${html}</div></div>`}
 function closeModal(){$('#modalHost').innerHTML=''}
+function ask(msg,okTxt,fn,danger){window.__askFn=fn;modal(`<h2>${danger?'⚠️ ':''}Confirmar</h2><p style="white-space:pre-line;margin:8px 0 14px">${esc(msg)}</p><div class="row"><button class="btn sec" style="flex:1" onclick="closeModal()">Volver</button><button class="btn ${danger?'bad':''}" style="flex:1" onclick="closeModal();window.__askFn()">${esc(okTxt)}</button></div>`)}
 function openCart(){
   if(ROLE==='cliente')return openCartCli();
   if(!S.cart.length){closeModal();return}
@@ -704,7 +705,7 @@ async function doRegister(){
   REGISTERING=false;authBusy=false;
   await afterAuth(cred);
 }
-function logout(){if(!confirm('¿Cerrar sesión?'))return;tab='vender';authMode_='in';authErr='';X&&X.signOut()}
+function logout(){ask('¿Cerrar sesión?','Cerrar sesión',()=>{tab='vender';authMode_='in';authErr='';X&&X.signOut()})}
 function openCambiarPw(){
   modal(`<h2>Cambiar contraseña</h2><label>Contraseña actual</label><input id="pOld" type="password" autocomplete="current-password"><label>Contraseña nueva</label><input id="pNew" type="password" autocomplete="new-password" placeholder="mínimo 6 caracteres"><label>Repetí la nueva</label><input id="pNew2" type="password" autocomplete="new-password"><div id="pErr" style="color:#ff6b6b;min-height:20px;margin:8px 0;font-size:14px"></div><div class="row"><button class="btn sec" onclick="closeModal()">Cancelar</button><span style="flex:1"></span><button class="btn" id="pGo" onclick="doCambiarPw()">Cambiar</button></div>`);
 }
@@ -743,7 +744,7 @@ function vMis(){
 }
 function verCompra(id){
   const v=VENTAS_C.find(x=>x.id===id);if(!v)return;
-  modal(`<h2>${v.tipo==='pedido'?'Pedido':'Compra'} del ${new Date(v.fecha).toLocaleDateString('es-AR')}</h2>${v.nombre&&ROLE==='admin'?`<div class="muted">${esc(v.nombre)} · @${esc(v.usuario)}</div>`:''}<div class="muted" style="margin:4px 0 8px">${esc(estTxt(v))}${v.pago?' · '+esc(v.pago):''}</div>${v.items.map(i=>`<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><span style="flex:1">${i.q} × ${esc(i.n)}</span><b>${money(i.p*i.q)}</b></div>`).join('')}${v.desc?`<div class="muted" style="margin-top:6px">Descuento ${v.desc}%</div>`:''}<div class="tot"><span>Total</span><span>${money(v.total)}</span></div>${v.nota?`<div class="muted">Nota: ${esc(v.nota)}</div>`:''}${v.editado?`<div class="muted" style="margin-top:4px">✎ Editado el ${fmtF(v.editado)} por ${v.editadoPor==='admin'?'el comercio':'el cliente'}</div>`:''}<div class="row" style="margin-top:10px">${editable(v)?`<button class="btn" onclick="abrirEditor('${esc(v.id)}')">✎ Editar pedido</button>`:''}<button class="btn sec" style="flex:1" onclick="closeModal()">Cerrar</button></div>`);
+  modal(`<h2>${v.tipo==='pedido'?'Pedido':'Compra'} del ${new Date(v.fecha).toLocaleDateString('es-AR')}</h2>${v.nombre&&ROLE==='admin'?`<div class="muted">${esc(v.nombre)} · @${esc(v.usuario)}</div>`:''}<div class="muted" style="margin:4px 0 8px">${esc(estTxt(v))}${v.pago?' · '+esc(v.pago):''}</div>${v.items.map(i=>`<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><span style="flex:1">${i.q} × ${esc(i.n)}</span><b>${money(i.p*i.q)}</b></div>`).join('')}${v.desc?`<div class="muted" style="margin-top:6px">Descuento ${v.desc}%</div>`:''}<div class="tot"><span>Total</span><span>${money(v.total)}</span></div>${v.nota?`<div class="muted">Nota: ${esc(v.nota)}</div>`:''}${v.editado?`<div class="muted" style="margin-top:4px">✎ Editado el ${fmtF(v.editado)} por ${v.editadoPor==='admin'?'el comercio':'el cliente'}</div>`:''}<div class="row" style="margin-top:10px">${editable(v)?`<button class="btn" onclick="abrirEditor('${esc(v.id)}')">✎ Editar pedido</button>`:''}${(ROLE==='admin'||(v.tipo==='pedido'&&(v.estado==='nuevo'||v.estado==='cancelado')))?`<button class="btn bad" onclick="delPedido('${esc(v.id)}')">🗑 Eliminar</button>`:''}<button class="btn sec" style="flex:1" onclick="closeModal()">Cerrar</button></div>`);
 }
 /* ---------- editar un pedido (cliente y administrador) ---------- */
 function abrirEditor(id){
@@ -783,8 +784,8 @@ async function edGuardar(){
   try{await X.update('ventas/'+ED.id,{items:ED.items.map(({c,n,q,p})=>({c,n,q,p})),total,nota,editado:new Date().toISOString(),editadoPor:ROLE});closeModal();render();toast('Pedido actualizado')}
   catch(e){toast('No pude guardar. Puede que el pedido ya esté entregado o cancelado.')}
 }
-async function edCancelar(){
-  if(!confirm('¿Cancelar este pedido?'))return;
+function edCancelar(){ask('¿Cancelar este pedido?','Sí, cancelar',edCancelar_,true)}
+async function edCancelar_(){
   try{await X.update('ventas/'+ED.id,{estado:'cancelado',editado:new Date().toISOString(),editadoPor:ROLE});closeModal();render();toast('Pedido cancelado')}catch(e){toast('No pude cancelar')}
 }
 function vCuenta(){
@@ -812,7 +813,7 @@ function pedidoRow(v){
   const nuevo=v.estado==='nuevo';
   return `<div style="border-top:1px solid var(--line);padding:8px 0"><div class="row"><span style="flex:1"><b>${new Date(v.fecha).toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'})}</b> <span class="tag ${v.estado==='entregado'?'ok':''}">${esc(estTxt(v))}</span></span><b style="color:var(--yel)">${money(v.total)}</b></div>
   <div class="muted" style="margin:2px 0 6px">${v.items.map(i=>i.q+'× '+esc(i.n)).slice(0,3).join(' · ')}${v.items.length>3?' · +'+(v.items.length-3)+' más':''}${v.nota?' — “'+esc(v.nota)+'”':''}</div>
-  <div class="row" style="flex-wrap:wrap"><button class="btn sec sm" onclick="verCompra('${esc(v.id)}')">Ver</button>${nuevo?`<button class="btn sm" onclick="abrirEditor('${esc(v.id)}')">✎ Editar</button><button class="btn sec sm" onclick="setEstado('${esc(v.id)}','entregado')">Entregado</button><button class="btn bad sm" onclick="setEstado('${esc(v.id)}','cancelado')">Cancelar</button>`:''}</div></div>`;
+  <div class="row" style="flex-wrap:wrap"><button class="btn sec sm" onclick="verCompra('${esc(v.id)}')">Ver</button>${nuevo?`<button class="btn sm" onclick="abrirEditor('${esc(v.id)}')">✎ Editar</button><button class="btn sec sm" onclick="setEstado('${esc(v.id)}','entregado')">Entregado</button><button class="btn bad sm" onclick="setEstado('${esc(v.id)}','cancelado')">Cancelar</button>`:''}<button class="btn bad sm" onclick="delPedido('${esc(v.id)}')">🗑 Eliminar</button></div></div>`;
 }
 function pintarCli(){
   const t=termsOf(qCli),G=gruposClientes().filter(g=>{const h=norm(g.c.nombre+' '+g.c.usuario+' '+g.c.tel);return t.every(x=>h.includes(x))});
@@ -824,7 +825,7 @@ function pintarCli(){
     if(!abierto)return `<div class="card" ${g.nuevos.length?'style="border-color:var(--yel)"':''}>${head}</div>`;
     const peds=g.peds.length?`<div style="margin-top:10px"><b>Pedidos (${g.peds.length})</b>${g.peds.map(pedidoRow).join('')}</div>`:'<div class="muted" style="margin-top:10px">Sin pedidos.</div>';
     const otros=g.otros.length?`<div class="muted" style="margin-top:8px">Compras en el mostrador: ${g.otros.length}</div>`:'';
-    const gest=c._gone?'':`<label>Precio especial: margen % (vacío = el de clientes, ${defM}%)</label><div class="row"><input style="flex:1;min-width:0" id="m_${id}" type="number" inputmode="decimal" value="${c.margen==null?'':c.margen}" placeholder="${defM}"><button class="btn sm" style="flex:none" onclick="saveCliMargen('${id}')">Guardar</button></div>
+    const gest=c._gone?`<div class="row" style="margin-top:8px"><button class="btn bad sm" onclick="delGone('${id}')">Eliminar todo de este cliente</button></div>`:`<label>Precio especial: margen % (vacío = el de clientes, ${defM}%)</label><div class="row"><input style="flex:1;min-width:0" id="m_${id}" type="number" inputmode="decimal" value="${c.margen==null?'':c.margen}" placeholder="${defM}"><button class="btn sm" style="flex:none" onclick="saveCliMargen('${id}')">Guardar</button></div>
     <div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="btn sec sm" onclick="verComprasCli('${id}')">Compras</button><a style="text-decoration:none;display:inline-block;background:var(--panel2);color:var(--tx);border:1px solid var(--line);border-radius:var(--r);padding:6px 10px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em" target="_blank" rel="noopener" href="${wa}">WhatsApp</a><button class="btn sec sm" onclick="toggleCliAct('${id}')">${c.activo===false?'Desbloquear':'Bloquear'}</button><button class="btn bad sm" onclick="delCli('${id}')">Eliminar</button></div>`;
     return `<div class="card" ${g.nuevos.length?'style="border-color:var(--yel)"':''}>${head}${peds}${otros}${gest}</div>`}).join(''):'<div class="empty">No hay clientes.</div>';
 }
@@ -834,11 +835,21 @@ async function saveCliMargen(id){
   if(v!==null&&(v<0||v>500)){toast('Margen entre 0 y 500');return}
   try{await X.update('users/'+id,{margen:v});toast(v===null?'Usa el margen de clientes':'Margen '+v+'% guardado')}catch(e){toast('No pude guardar')}
 }
-async function toggleCliAct(id){const c=CLIENTES.find(x=>x.id===id);if(!c)return;const nuevo=c.activo===false;if(!nuevo&&!confirm('¿Bloquear a '+c.nombre+'? No va a poder ver el catálogo.'))return;try{await X.update('users/'+id,{activo:nuevo});toast(nuevo?'Desbloqueado':'Bloqueado')}catch(e){toast('No pude guardar')}}
-async function delCli(id){
+function toggleCliAct(id){const c=CLIENTES.find(x=>x.id===id);if(!c)return;const nuevo=c.activo===false;
+  const go=async()=>{try{await X.update('users/'+id,{activo:nuevo});toast(nuevo?'Desbloqueado':'Bloqueado')}catch(e){toast('No pude guardar')}};
+  nuevo?go():ask('¿Bloquear a '+c.nombre+'? No va a poder ver el catálogo.','Bloquear',go,true)}
+function delCli(id){
   const c=CLIENTES.find(x=>x.id===id);if(!c)return;
-  if(!confirm('¿Eliminar a '+c.nombre+'?\n\nSe borran sus datos y se libera su teléfono. Para que pueda volver a registrarse con el mismo usuario, borralo también en Firebase → Authentication.'))return;
-  try{await X.batchDel(['users/'+id,'tels/'+(c.telKey||telKey(c.tel))]);toast('Cliente eliminado')}catch(e){toast('No pude eliminar')}
+  const vs=VENTAS_C.filter(v=>v.uid===id);
+  ask('¿Eliminar a '+c.nombre+'?\n\nSe borran sus datos, su teléfono queda libre'+(vs.length?' y también sus '+vs.length+' pedido'+(vs.length>1?'s':'')+'/compras':'')+'. Para que pueda volver a registrarse con el mismo usuario, borralo también en Firebase → Authentication.','Eliminar cliente',async()=>{
+    try{await X.batchDel(['users/'+id,'tels/'+(c.telKey||telKey(c.tel)),...vs.map(v=>'ventas/'+v.id)]);OPENCLI.delete(id);toast('Cliente eliminado')}catch(e){toast('No pude eliminar')}},true);
+}
+function delGone(id){const vs=VENTAS_C.filter(v=>v.uid===id);ask('¿Eliminar los '+vs.length+' pedido(s)/compra(s) de este cliente ya borrado?','Eliminar',async()=>{try{await X.batchDel(vs.map(v=>'ventas/'+v.id));toast('Eliminado')}catch(e){toast('No pude eliminar')}},true)}
+function delPedido(id){
+  const v=VENTAS_C.find(x=>x.id===id);if(!v)return;
+  if(ROLE!=='admin'&&!(v.tipo==='pedido'&&(v.estado==='nuevo'||v.estado==='cancelado'))){toast('Este pedido ya no se puede eliminar');return}
+  ask('¿Eliminar este pedido del '+new Date(v.fecha).toLocaleDateString('es-AR')+' ('+money(v.total)+')?\nNo se puede deshacer.','Eliminar',async()=>{
+    try{await X.batchDel(['ventas/'+id]);closeModal();toast('Pedido eliminado')}catch(e){toast('No pude eliminar el pedido')}},true);
 }
 async function setEstado(id,e){try{await X.update('ventas/'+id,{estado:e});toast(e==='entregado'?'Marcado como entregado':'Pedido cancelado')}catch(er){toast('No pude guardar')}}
 function verComprasCli(id){
