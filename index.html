@@ -123,6 +123,27 @@ body.auth .authcard{margin:-34px 14px 0;position:relative;box-shadow:0 16px 40px
 mark{background:#ffc40055;color:inherit;border-radius:3px;padding:0 1px}
 .lb img{width:100%;max-height:60vh;object-fit:contain;background:#fff;border-radius:10px}
 .lb .th{display:flex;gap:6px;margin:8px 0}.lb .th img{width:56px;height:56px;max-height:none;object-fit:contain;border:2px solid transparent;cursor:pointer}.lb .th img.on{border-color:var(--yel)}
+/* ---------- interactividad (v2.6.0) ---------- */
+button,.card,.gc,.chip,.kpi{transition:transform .12s ease,box-shadow .2s ease,background .2s ease,border-color .2s ease}
+button:active:not(:disabled),.card[onclick]:active,.gc:active{transform:scale(.96)}
+@media(hover:hover){.gc:hover{transform:translateY(-3px);border-color:var(--yel);box-shadow:0 8px 20px #0008}.card[onclick]:hover{border-color:var(--yel)}.chip:hover{border-color:var(--yel)}button.btn:hover:not(:disabled){filter:brightness(1.1)}}
+@keyframes fup{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+main.enter .gc,main.enter .card,main.enter .kpi{animation:fup .35s ease both}
+main.enter .gc:nth-child(2),main.enter .card:nth-child(2){animation-delay:.04s}main.enter .gc:nth-child(3),main.enter .card:nth-child(3){animation-delay:.08s}main.enter .gc:nth-child(4),main.enter .card:nth-child(4){animation-delay:.12s}main.enter .gc:nth-child(n+5),main.enter .card:nth-child(n+5){animation-delay:.16s}
+@keyframes pop{0%{transform:scale(1)}40%{transform:scale(1.35) rotate(8deg)}100%{transform:scale(1)}}
+.pop{animation:pop .35s ease}
+@keyframes bump{0%,100%{transform:none}35%{transform:translateY(-7px) scale(1.03)}}
+.cartbar.bump{animation:bump .35s ease}
+.badge.pop{animation:pop .35s ease}
+@keyframes sl{from{transform:translateY(100%)}to{transform:none}}
+@keyframes fi{from{opacity:0}to{opacity:1}}
+.modal{animation:fi .2s ease}.modal>div{animation:sl .28s cubic-bezier(.2,.8,.2,1)}
+@keyframes tin{from{opacity:0;transform:translate(-50%,14px) scale(.9)}to{opacity:1;transform:translateX(-50%)}}
+.toast{animation:tin .22s ease}
+nav button.on b{animation:pop .35s ease}
+#toTop{position:fixed;right:14px;bottom:calc(130px + env(safe-area-inset-bottom));z-index:24;width:44px;height:44px;border-radius:50%;border:0;background:var(--yel);color:#1b1b1d;font-size:22px;font-weight:900;box-shadow:0 4px 14px #0009;opacity:0;pointer-events:none;transform:translateY(12px) scale(.8);transition:opacity .2s,transform .2s}
+#toTop.on{opacity:1;pointer-events:auto;transform:none}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 @media print{body *{visibility:hidden}#printArea,#printArea *{visibility:visible}#printArea{position:absolute;left:0;top:0;width:100%}pre.ticket{font-size:12px}}
 </style>
 </head>
@@ -131,12 +152,13 @@ mark{background:#ffc40055;color:inherit;border-radius:3px;padding:0 1px}
 <div id="pedBanner" onclick="try{if('Notification' in window&&Notification.permission==='default')Notification.requestPermission()}catch(e){};go('clientes')"></div>
 <main id="main"></main>
 <div id="cartHost"></div>
+<button id="toTop" aria-label="Subir" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
 <nav id="nav"></nav>
 <div id="modalHost"></div>
 <div id="printHost" style="display:none"></div>
 
 <script>
-const APP_VERSION='2.5.0';
+const APP_VERSION='2.6.0';
 const WA_NUM='5491165366884',WA_TXT='Hola SHR Garage & Tools, quería consultar por un producto.';
 /* Configuración fija del negocio (igual en todos los equipos). Se completa al publicar la app. */
 const FIXED=null;
@@ -256,6 +278,13 @@ function addToCart(c){
   const l=S.cart.find(x=>x.c===p.c);
   if(l)l.q+=1;else S.cart.push({c:p.c,n:nombre(p),q:1,p:precio(p),costo:costo(p)});
   save();renderCartBar();updBadge(p.c);toast('+1 '+nombre(p).slice(0,30));
+  feedback((window.event||{}).target,c);
+}
+function feedback(t,c){
+  try{navigator.vibrate&&navigator.vibrate(15)}catch(e){}
+  const b=t&&t.closest?t.closest('button'):null;if(b){b.classList.remove('pop');void b.offsetWidth;b.classList.add('pop')}
+  document.querySelectorAll('.badge').forEach(x=>{if(x.dataset.b===c){x.classList.remove('pop');void x.offsetWidth;x.classList.add('pop')}});
+  const cb=document.querySelector('.cartbar');if(cb){cb.classList.remove('bump');void cb.offsetWidth;cb.classList.add('bump')}
 }
 function updBadge(c){const q=cartQty(c);document.querySelectorAll('.badge').forEach(b=>{if(b.dataset.b===c){b.textContent=q;b.classList.toggle('on',q>0)}})}
 const cartQty=c=>{const l=S.cart.find(x=>x.c===c);return l?l.q:0};
@@ -273,7 +302,8 @@ function nav(){
   $('#nav').innerHTML=T.map(([k,i,l])=>`<button class="${tab===k?'on':''}" onclick="go('${k}')"><b>${i}</b>${l}</button>`).join('');
 }
 const TABS_OK=()=>ROLE==='admin'?['vender','productos','clientes','ventas','config']:ROLE==='cliente'?['vender','mis','cuenta']:[];
-function go(t){if(!TABS_OK().includes(t))return;tab=t;render()}
+function go(t){if(!TABS_OK().includes(t))return;tab=t;render();const m=$('#main');m.classList.remove('enter');void m.offsetWidth;m.classList.add('enter');setTimeout(()=>m.classList.remove('enter'),700);window.scrollTo({top:0})}
+addEventListener('scroll',()=>{const b=$('#toTop');if(b)b.classList.toggle('on',scrollY>500)},{passive:true});
 function render(){
   $('#hNombre').innerHTML=esc(S.cfg.nombre).replace(/ &amp; /,' <span>&amp;</span> ');
   const lg=$('#hLogo');if(LOGO){lg.src=LOGO;lg.alt=S.cfg.nombre;lg.style.display='block'}
