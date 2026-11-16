@@ -46,7 +46,14 @@ service cloud.firestore {
         && request.resource.data.tipo == 'pedido'
         && request.resource.data.estado == 'nuevo'
         && request.resource.data.keys().hasOnly(['uid', 'usuario', 'nombre', 'tel', 'tipo', 'estado', 'fecha', 'items', 'total', 'nota']));
-      allow update, delete: if isAdmin();
+      // El cliente puede editar o cancelar su pedido mientras esté "nuevo"; el admin puede todo.
+      allow update: if isAdmin() || (signed() && isActive()
+        && resource.data.uid == request.auth.uid
+        && resource.data.tipo == 'pedido'
+        && resource.data.estado == 'nuevo'
+        && request.resource.data.estado in ['nuevo', 'cancelado']
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['items', 'total', 'nota', 'editado', 'editadoPor', 'estado']));
+      allow delete: if isAdmin();
     }
   }
 }

@@ -134,7 +134,7 @@ mark{background:#ffc40055;color:inherit;border-radius:3px;padding:0 1px}
 <div id="printHost" style="display:none"></div>
 
 <script>
-const APP_VERSION='2.3.0';
+const APP_VERSION='2.4.0';
 const WA_NUM='5491165366884',WA_TXT='Hola SHR Garage & Tools, quería consultar por un producto.';
 /* Configuración fija del negocio (igual en todos los equipos). Se completa al publicar la app. */
 const FIXED=null;
@@ -155,7 +155,7 @@ function save(){try{localStorage.setItem(LS,JSON.stringify(S))}catch(e){toast('N
 /* ---------- modo administrador (contraseña) ---------- */
 let ADMIN_MS=5*60*1000,adminUntil=0,pwFails=0,pwBlock=0;
 /* Sesión: 'init' (cargando) | 'out' (sin sesión) | 'cliente' | 'admin' */
-let ROLE='init',ME=null,CLIENT=null,X=null,UNSUB=[],CLIENTES=[],VENTAS_C=[],cfgReady=false,lastSer='',myUpd='',pushT=null,SUPPRESS=false,authMode_='in',authBusy=false,REGISTERING=false,authErr='',qCli='';
+let OPENCLI=new Set(),ED=null,ROLE='init',ME=null,CLIENT=null,X=null,UNSUB=[],CLIENTES=[],VENTAS_C=[],cfgReady=false,lastSer='',myUpd='',pushT=null,SUPPRESS=false,authMode_='in',authBusy=false,REGISTERING=false,authErr='',qCli='';
 const isAdmin=()=>ROLE==='admin';
 const locked=()=>ROLE!=='admin';
 function touchAdmin(){if(S.cfg.pw&&Date.now()<adminUntil)adminUntil=Date.now()+ADMIN_MS}
@@ -735,14 +735,57 @@ async function enviarPedido(){
   S.cart=[];save();renderCartBar();
   modal(`<h2>${ok?'✅ Pedido guardado':'⚠️ No se pudo guardar el pedido'}</h2><p>${ok?'Ahora mandáselo a Ema por WhatsApp para coordinar.':'Igual podés mandarlo por WhatsApp.'}</p><a target="_blank" rel="noopener" href="https://wa.me/${WA_NUM}?text=${encodeURIComponent(txt)}" style="display:block;text-align:center;text-decoration:none;background:#25d366;color:#06361a;font-weight:800;border-radius:10px;padding:14px;text-transform:uppercase">Enviar por WhatsApp</a><div class="row" style="margin-top:10px"><button class="btn sec" style="flex:1" onclick="closeModal();render()">Cerrar</button></div>`);
 }
-const estTxt=v=>v.estado==='anulada'?'Anulada':v.tipo==='pedido'?({nuevo:'Pedido enviado',entregado:'Entregado',cancelado:'Cancelado'}[v.estado]||v.estado):'Compra';
+const estTxt=v=>(v.estado==='anulada'?'Anulada':v.tipo==='pedido'?({nuevo:'Pedido enviado',entregado:'Entregado',cancelado:'Cancelado'}[v.estado]||v.estado):'Compra')+(v.editado?' ✎':'');
+const editable=v=>!!v&&v.tipo==='pedido'&&v.estado==='nuevo'&&(ROLE==='cliente'||ROLE==='admin');
 function vMis(){
   const L=VENTAS_C;
-  $('#main').innerHTML=`<h3 style="margin:6px 2px">Mis compras y pedidos</h3>`+(L.length?L.map(v=>`<div class="card" onclick="verCompra('${esc(v.id)}')"><div class="row"><b style="flex:1">${new Date(v.fecha).toLocaleDateString('es-AR')}</b><span class="tag ${v.estado==='entregado'?'ok':''}">${esc(estTxt(v))}</span><b style="color:var(--yel)">${money(v.total)}</b></div><div class="muted" style="margin-top:4px">${v.items.length} producto${v.items.length>1?'s':''}</div></div>`).join(''):'<div class="empty">Todavía no tenés compras ni pedidos.</div>');
+  $('#main').innerHTML=`<h3 style="margin:6px 2px">Mis compras y pedidos</h3>`+(L.length?L.map(v=>`<div class="card" onclick="verCompra('${esc(v.id)}')"><div class="row"><b style="flex:1">${new Date(v.fecha).toLocaleDateString('es-AR')}</b><span class="tag ${v.estado==='entregado'?'ok':''}">${esc(estTxt(v))}</span><b style="color:var(--yel)">${money(v.total)}</b></div><div class="muted" style="margin-top:4px">${v.items.length} producto${v.items.length>1?'s':''}${editable(v)?' · tocá para ver o editar':''}</div></div>`).join(''):'<div class="empty">Todavía no tenés compras ni pedidos.</div>');
 }
 function verCompra(id){
   const v=VENTAS_C.find(x=>x.id===id);if(!v)return;
-  modal(`<h2>${v.tipo==='pedido'?'Pedido':'Compra'} del ${new Date(v.fecha).toLocaleDateString('es-AR')}</h2>${v.nombre&&ROLE==='admin'?`<div class="muted">${esc(v.nombre)} · @${esc(v.usuario)}</div>`:''}<div class="muted" style="margin:4px 0 8px">${esc(estTxt(v))}${v.pago?' · '+esc(v.pago):''}</div>${v.items.map(i=>`<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><span style="flex:1">${i.q} × ${esc(i.n)}</span><b>${money(i.p*i.q)}</b></div>`).join('')}${v.desc?`<div class="muted" style="margin-top:6px">Descuento ${v.desc}%</div>`:''}<div class="tot"><span>Total</span><span>${money(v.total)}</span></div>${v.nota?`<div class="muted">Nota: ${esc(v.nota)}</div>`:''}<div class="row" style="margin-top:10px"><button class="btn sec" style="flex:1" onclick="closeModal()">Cerrar</button></div>`);
+  modal(`<h2>${v.tipo==='pedido'?'Pedido':'Compra'} del ${new Date(v.fecha).toLocaleDateString('es-AR')}</h2>${v.nombre&&ROLE==='admin'?`<div class="muted">${esc(v.nombre)} · @${esc(v.usuario)}</div>`:''}<div class="muted" style="margin:4px 0 8px">${esc(estTxt(v))}${v.pago?' · '+esc(v.pago):''}</div>${v.items.map(i=>`<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><span style="flex:1">${i.q} × ${esc(i.n)}</span><b>${money(i.p*i.q)}</b></div>`).join('')}${v.desc?`<div class="muted" style="margin-top:6px">Descuento ${v.desc}%</div>`:''}<div class="tot"><span>Total</span><span>${money(v.total)}</span></div>${v.nota?`<div class="muted">Nota: ${esc(v.nota)}</div>`:''}${v.editado?`<div class="muted" style="margin-top:4px">✎ Editado el ${fmtF(v.editado)} por ${v.editadoPor==='admin'?'el comercio':'el cliente'}</div>`:''}<div class="row" style="margin-top:10px">${editable(v)?`<button class="btn" onclick="abrirEditor('${esc(v.id)}')">✎ Editar pedido</button>`:''}<button class="btn sec" style="flex:1" onclick="closeModal()">Cerrar</button></div>`);
+}
+/* ---------- editar un pedido (cliente y administrador) ---------- */
+function abrirEditor(id){
+  const v=VENTAS_C.find(x=>x.id===id);
+  if(!editable(v)){toast('Este pedido ya no se puede editar');return}
+  ED={id,uid:v.uid,items:v.items.map(i=>({c:i.c,n:i.n,q:i.q,p:i.p})),cli:CLIENTES.find(c=>c.id===v.uid)||null};
+  modal(`<h2>Editar pedido</h2>${ROLE==='admin'?`<div class="muted">${esc(v.nombre)} · @${esc(v.usuario)}</div>`:'<div class="muted">Podés cambiar cantidades, sacar o agregar productos mientras Ema no lo haya preparado.</div>'}
+  <div id="edLines" style="margin-top:8px"></div>
+  <label>Agregar productos</label><input id="edQ" type="search" placeholder="Buscar producto…" autocomplete="off"><div id="edRes"></div>
+  <label>Aclaración (opcional)</label><input id="edNota" value="${esc(v.nota||'')}">
+  <div class="tot"><span>Total</span><span id="edTot"></span></div>
+  <div class="row"><button class="btn sec" onclick="closeModal()">Volver</button><span style="flex:1"></span><button class="btn" onclick="edGuardar()">Guardar cambios</button></div>
+  <div style="margin-top:10px"><button class="btn bad sm" style="width:100%" onclick="edCancelar()">Cancelar este pedido</button></div>`);
+  $('#edQ').oninput=e=>pintarEdRes(e.target.value);pintarED();
+}
+function pintarED(){
+  $('#edLines').innerHTML=ED.items.length?ED.items.map((l,i)=>`<div class="card"><div class="nm">${esc(l.n)}</div><div class="row" style="margin-top:6px"><div class="q"><button onclick="edQty(${i},-1)">−</button><input type="number" inputmode="decimal" value="${l.q}" onchange="edQtySet(${i},this.value)"><button onclick="edQty(${i},1)">+</button></div><span style="flex:1"></span>${ROLE==='admin'?`<input type="number" inputmode="decimal" value="${l.p}" style="width:100px" onchange="edPrice(${i},this.value)">`:`<span class="muted">${money(l.p)} c/u</span>`}<b style="width:86px;text-align:right">${money(l.q*l.p)}</b><button class="btn bad sm" onclick="edRm(${i})">✕</button></div></div>`).join(''):'<div class="empty" style="padding:14px">No quedó ningún producto.</div>';
+  $('#edTot').textContent=money(ED.items.reduce((a,l)=>a+l.q*l.p,0));
+}
+const edQty=(i,d)=>{ED.items[i].q=Math.max(0,+(ED.items[i].q+d).toFixed(3));if(!ED.items[i].q)ED.items.splice(i,1);pintarED()};
+const edQtySet=(i,v)=>{const q=num(v);if(q<=0)ED.items.splice(i,1);else ED.items[i].q=q;pintarED()};
+const edPrice=(i,v)=>{ED.items[i].p=Math.max(0,num(v));pintarED()};
+const edRm=i=>{ED.items.splice(i,1);pintarED()};
+function precioEd(p){return ROLE==='admin'?precioCon(p,ED.cli?margenCli(ED.cli):null):precio(p)}
+function pintarEdRes(q){
+  const t=String(q||'').trim();
+  $('#edRes').innerHTML=t.length<2?'':searchProds(t,'',6).map(p=>`<div class="card" style="display:flex;gap:8px;align-items:center"><div style="flex:1;min-width:0"><div class="nm">${esc(nombre(p))}</div><div class="muted">Cód. ${esc(p.c)} · ${money(precioEd(p))}</div></div><button class="btn add" onclick="edAdd('${esc(p.c)}')">+</button></div>`).join('')||'<div class="muted" style="padding:6px">Sin resultados.</div>';
+}
+function edAdd(c){
+  const p=find(c);if(!p)return;const l=ED.items.find(x=>x.c===p.c);
+  if(l)l.q+=1;else ED.items.push({c:p.c,n:nombre(p),q:1,p:precioEd(p)});
+  pintarED();toast('+1 '+nombre(p).slice(0,28));
+}
+async function edGuardar(){
+  if(!ED.items.length){toast('El pedido quedó vacío. Si no lo querés, tocá "Cancelar este pedido".');return}
+  const total=ED.items.reduce((a,l)=>a+l.q*l.p,0),nota=$('#edNota').value.trim();
+  try{await X.update('ventas/'+ED.id,{items:ED.items.map(({c,n,q,p})=>({c,n,q,p})),total,nota,editado:new Date().toISOString(),editadoPor:ROLE});closeModal();render();toast('Pedido actualizado')}
+  catch(e){toast('No pude guardar. Puede que el pedido ya esté entregado o cancelado.')}
+}
+async function edCancelar(){
+  if(!confirm('¿Cancelar este pedido?'))return;
+  try{await X.update('ventas/'+ED.id,{estado:'cancelado',editado:new Date().toISOString(),editadoPor:ROLE});closeModal();render();toast('Pedido cancelado')}catch(e){toast('No pude cancelar')}
 }
 function vCuenta(){
   const c=CLIENT;
@@ -753,25 +796,45 @@ function vCuenta(){
 const clienteDe=txt=>{txt=String(txt||'').trim();return txt?CLIENTES.find(c=>`${c.nombre} (@${c.usuario})`===txt):null};
 const margenCli=c=>(c.margen!=null&&c.margen!=='')?+c.margen:margenClienteBase();
 function aplicarPrecioCliente(){const c=clienteDe(window.__cli);if(!c)return;S.cart.forEach(l=>{const p=find(l.c);if(p)l.p=precioCon(p,margenCli(c))});save();renderCartBar();openCart();toast('Precios del cliente aplicados')}
+function gruposClientes(){
+  const m=new Map();
+  CLIENTES.forEach(c=>m.set(c.id,{c,peds:[],otros:[]}));
+  VENTAS_C.forEach(v=>{if(!m.has(v.uid))m.set(v.uid,{c:{id:v.uid,nombre:v.nombre||'(cliente eliminado)',usuario:v.usuario||'',tel:v.tel||'',_gone:true},peds:[],otros:[]});const g=m.get(v.uid);(v.tipo==='pedido'?g.peds:g.otros).push(v)});
+  return [...m.values()].map(g=>({...g,nuevos:g.peds.filter(v=>v.estado==='nuevo')})).sort((a,b)=>(b.nuevos.length>0)-(a.nuevos.length>0)||String(a.c.nombre).localeCompare(String(b.c.nombre),'es'));
+}
 function vClientes(){
-  const nuevos=VENTAS_C.filter(v=>v.tipo==='pedido'&&v.estado==='nuevo');
-  $('#main').innerHTML=`<h3 style="margin:6px 2px">Pedidos nuevos (${nuevos.length})</h3>`+(nuevos.length?nuevos.map(v=>`<div class="card"><div class="row"><b style="flex:1">${esc(v.nombre)} <span class="muted">@${esc(v.usuario)}</span></b><b style="color:var(--yel)">${money(v.total)}</b></div><div class="muted">${new Date(v.fecha).toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'})} · ${v.items.length} producto${v.items.length>1?'s':''}${v.nota?' · '+esc(v.nota):''}</div><div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="btn sm" onclick="verCompra('${esc(v.id)}')">Ver</button><button class="btn sec sm" onclick="setEstado('${esc(v.id)}','entregado')">Entregado</button><button class="btn bad sm" onclick="setEstado('${esc(v.id)}','cancelado')">Cancelar</button></div></div>`).join(''):'<div class="empty" style="padding:14px">No hay pedidos nuevos.</div>')+
-  `<h3 style="margin:18px 2px 4px">Clientes (${CLIENTES.length})</h3><div style="margin:6px 0"><div class="sbox"><input id="qc" type="search" placeholder="Buscar por nombre, usuario o teléfono…" value="${esc(qCli)}" autocomplete="off"></div></div><div id="cliList"></div>`;
+  const G=gruposClientes(),nNuevos=G.reduce((a,g)=>a+g.nuevos.length,0),nCli=G.filter(g=>g.nuevos.length).length;
+  $('#main').innerHTML=`<div class="grid2"><div class="kpi"><small>Pedidos nuevos</small><div>${nNuevos}</div></div><div class="kpi"><small>Clientes con pedidos</small><div>${nCli}</div></div></div>
+  <h3 style="margin:16px 2px 4px">Clientes (${CLIENTES.length})</h3><div style="margin:6px 0"><div class="sbox"><input id="qc" type="search" placeholder="Buscar por nombre, usuario o teléfono…" value="${esc(qCli)}" autocomplete="off"></div></div><div id="cliList"></div>`;
   $('#qc').oninput=e=>{qCli=e.target.value;pintarCli()};pintarCli();
 }
-function pintarCli(){
-  const t=termsOf(qCli),L=CLIENTES.filter(c=>{const h=norm(c.nombre+' '+c.usuario+' '+c.tel);return t.every(x=>h.includes(x))});
-  $('#cliList').innerHTML=L.length?L.map(c=>{const mine=VENTAS_C.filter(v=>v.uid===c.id&&v.estado!=='cancelado'&&v.estado!=='anulada'),tot=mine.reduce((a,v)=>a+(v.total||0),0),wa='https://wa.me/54'+(String(c.telKey||c.tel).replace(/\D/g,'').replace(/^(?!9)/,'9'));
-    return `<div class="card"><div class="row"><b style="flex:1">${esc(c.nombre)}</b>${c.activo===false?'<span class="tag low">bloqueado</span>':''}</div><div class="muted">@${esc(c.usuario)} · ${esc(c.tel)} · ${mine.length} compra${mine.length===1?'':'s'} · ${money(tot)}</div>
-    <label>Precio especial: margen % (vacío = el de clientes, ${margenClienteBase()==null?S.cfg.margen:margenClienteBase()}%)</label><div class="row"><input style="flex:1;min-width:0" id="m_${esc(c.id)}" type="number" inputmode="decimal" value="${c.margen==null?'':c.margen}" placeholder="${margenClienteBase()==null?S.cfg.margen:margenClienteBase()}"><button class="btn sm" style="flex:none" onclick="saveCliMargen('${esc(c.id)}')">Guardar</button></div>
-    <div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="btn sec sm" onclick="verComprasCli('${esc(c.id)}')">Compras</button><a style="text-decoration:none;display:inline-block;background:var(--panel2);color:var(--tx);border:1px solid var(--line);border-radius:var(--r);padding:6px 10px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em" target="_blank" rel="noopener" href="${wa}">WhatsApp</a><button class="btn sec sm" onclick="toggleCli('${esc(c.id)}')">${c.activo===false?'Desbloquear':'Bloquear'}</button><button class="btn bad sm" onclick="delCli('${esc(c.id)}')">Eliminar</button></div></div>`}).join(''):'<div class="empty">No hay clientes.</div>';
+function pedidoRow(v){
+  const nuevo=v.estado==='nuevo';
+  return `<div style="border-top:1px solid var(--line);padding:8px 0"><div class="row"><span style="flex:1"><b>${new Date(v.fecha).toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'})}</b> <span class="tag ${v.estado==='entregado'?'ok':''}">${esc(estTxt(v))}</span></span><b style="color:var(--yel)">${money(v.total)}</b></div>
+  <div class="muted" style="margin:2px 0 6px">${v.items.map(i=>i.q+'× '+esc(i.n)).slice(0,3).join(' · ')}${v.items.length>3?' · +'+(v.items.length-3)+' más':''}${v.nota?' — “'+esc(v.nota)+'”':''}</div>
+  <div class="row" style="flex-wrap:wrap"><button class="btn sec sm" onclick="verCompra('${esc(v.id)}')">Ver</button>${nuevo?`<button class="btn sm" onclick="abrirEditor('${esc(v.id)}')">✎ Editar</button><button class="btn sec sm" onclick="setEstado('${esc(v.id)}','entregado')">Entregado</button><button class="btn bad sm" onclick="setEstado('${esc(v.id)}','cancelado')">Cancelar</button>`:''}</div></div>`;
 }
+function pintarCli(){
+  const t=termsOf(qCli),G=gruposClientes().filter(g=>{const h=norm(g.c.nombre+' '+g.c.usuario+' '+g.c.tel);return t.every(x=>h.includes(x))});
+  const defM=margenClienteBase()==null?S.cfg.margen:margenClienteBase();
+  $('#cliList').innerHTML=G.length?G.map(g=>{
+    const c=g.c,id=esc(c.id),abierto=OPENCLI.has(c.id)||(g.nuevos.length>0&&!OPENCLI.has('-'+c.id)),mine=[...g.peds,...g.otros].filter(v=>v.estado!=='cancelado'&&v.estado!=='anulada'),tot=mine.reduce((a,v)=>a+(v.total||0),0);
+    const wa='https://wa.me/54'+(String(c.telKey||c.tel).replace(/\D/g,'').replace(/^(?!9)/,'9'));
+    const head=`<div class="row" style="cursor:pointer" onclick="toggleCli('${id}')"><span style="font-size:18px;width:20px">${abierto?'▾':'▸'}</span><div style="flex:1;min-width:0"><b>${esc(c.nombre)}</b>${c.activo===false?' <span class="tag low">bloqueado</span>':''}<div class="muted">@${esc(c.usuario)} · ${esc(c.tel)}</div></div><div style="text-align:right">${g.nuevos.length?`<div class="tag" style="background:var(--yel);color:#1b1b1d;font-weight:800">🆕 ${g.nuevos.length} pedido${g.nuevos.length>1?'s':''}</div>`:''}<div class="muted" style="margin-top:2px">${mine.length} compra${mine.length===1?'':'s'} · ${money(tot)}</div></div></div>`;
+    if(!abierto)return `<div class="card" ${g.nuevos.length?'style="border-color:var(--yel)"':''}>${head}</div>`;
+    const peds=g.peds.length?`<div style="margin-top:10px"><b>Pedidos (${g.peds.length})</b>${g.peds.map(pedidoRow).join('')}</div>`:'<div class="muted" style="margin-top:10px">Sin pedidos.</div>';
+    const otros=g.otros.length?`<div class="muted" style="margin-top:8px">Compras en el mostrador: ${g.otros.length}</div>`:'';
+    const gest=c._gone?'':`<label>Precio especial: margen % (vacío = el de clientes, ${defM}%)</label><div class="row"><input style="flex:1;min-width:0" id="m_${id}" type="number" inputmode="decimal" value="${c.margen==null?'':c.margen}" placeholder="${defM}"><button class="btn sm" style="flex:none" onclick="saveCliMargen('${id}')">Guardar</button></div>
+    <div class="row" style="margin-top:8px;flex-wrap:wrap"><button class="btn sec sm" onclick="verComprasCli('${id}')">Compras</button><a style="text-decoration:none;display:inline-block;background:var(--panel2);color:var(--tx);border:1px solid var(--line);border-radius:var(--r);padding:6px 10px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em" target="_blank" rel="noopener" href="${wa}">WhatsApp</a><button class="btn sec sm" onclick="toggleCliAct('${id}')">${c.activo===false?'Desbloquear':'Bloquear'}</button><button class="btn bad sm" onclick="delCli('${id}')">Eliminar</button></div>`;
+    return `<div class="card" ${g.nuevos.length?'style="border-color:var(--yel)"':''}>${head}${peds}${otros}${gest}</div>`}).join(''):'<div class="empty">No hay clientes.</div>';
+}
+function toggleCli(id){const nuevos=VENTAS_C.some(v=>v.uid===id&&v.tipo==='pedido'&&v.estado==='nuevo');const abierto=OPENCLI.has(id)||(nuevos&&!OPENCLI.has('-'+id));if(abierto){OPENCLI.delete(id);OPENCLI.add('-'+id)}else{OPENCLI.add(id);OPENCLI.delete('-'+id)}pintarCli()}
 async function saveCliMargen(id){
   const el=$('#m_'+id),raw=el.value.trim(),v=raw===''?null:num(raw);
   if(v!==null&&(v<0||v>500)){toast('Margen entre 0 y 500');return}
   try{await X.update('users/'+id,{margen:v});toast(v===null?'Usa el margen de clientes':'Margen '+v+'% guardado')}catch(e){toast('No pude guardar')}
 }
-async function toggleCli(id){const c=CLIENTES.find(x=>x.id===id);if(!c)return;const nuevo=c.activo===false;if(!nuevo&&!confirm('¿Bloquear a '+c.nombre+'? No va a poder ver el catálogo.'))return;try{await X.update('users/'+id,{activo:nuevo});toast(nuevo?'Desbloqueado':'Bloqueado')}catch(e){toast('No pude guardar')}}
+async function toggleCliAct(id){const c=CLIENTES.find(x=>x.id===id);if(!c)return;const nuevo=c.activo===false;if(!nuevo&&!confirm('¿Bloquear a '+c.nombre+'? No va a poder ver el catálogo.'))return;try{await X.update('users/'+id,{activo:nuevo});toast(nuevo?'Desbloqueado':'Bloqueado')}catch(e){toast('No pude guardar')}}
 async function delCli(id){
   const c=CLIENTES.find(x=>x.id===id);if(!c)return;
   if(!confirm('¿Eliminar a '+c.nombre+'?\n\nSe borran sus datos y se libera su teléfono. Para que pueda volver a registrarse con el mismo usuario, borralo también en Firebase → Authentication.'))return;
