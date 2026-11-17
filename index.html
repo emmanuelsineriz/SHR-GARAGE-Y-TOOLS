@@ -169,7 +169,7 @@ nav button.on b{animation:pop .35s ease}
 <div id="printHost" style="display:none"></div>
 
 <script>
-const APP_VERSION='2.17.1';
+const APP_VERSION='2.18.0';
 const WA_NUM='5491165366884',WA_TXT='Hola SHR Garage & Tools, quería consultar por un producto.';
 /* Configuración fija del negocio (igual en todos los equipos). Se completa al publicar la app. */
 const FIXED=null;
@@ -900,7 +900,15 @@ async function realFBX(){
   };
 }
 const slug=u=>norm(u).replace(/\s+/g,'');
-const telKey=t=>String(t||'').replace(/\D/g,'').slice(-10);
+/* teléfono argentino -> 10 dígitos (característica + número): saca el 54, el 9, el 0 inicial y el 15 */
+const telKey=t=>{
+  let d=String(t||'').replace(/\D/g,'');
+  if(d.startsWith('549'))d=d.slice(3);else if(d.startsWith('54'))d=d.slice(2);
+  if(d.startsWith('0'))d=d.slice(1);
+  if(d.length===12){for(const i of [2,3,4]){if(d.slice(i,i+2)==='15'){d=d.slice(0,i)+d.slice(i+2);break}}}
+  if(d.length<=10&&d.startsWith('15'))d=d.slice(2);   /* "15 1234 5678": sin característica, no sirve */
+  return d.slice(-10);
+};
 const stable=o=>JSON.stringify(o);
 function authMsg(e){const c=(e&&e.code)||'';
   if(/invalid-credential|wrong-password|user-not-found|invalid-email|user-disabled/.test(c))return 'Usuario o contraseña incorrectos';
@@ -1007,7 +1015,7 @@ function vAuth(){
   <p class="muted" style="margin:0 0 4px">${reg?'Registrate una sola vez. El usuario y el teléfono no se pueden repetir.':'Ingresá con tu usuario para ver el catálogo y tus compras.'}</p>
   ${reg?'<label>Nombre y apellido</label><input id="aN" autocomplete="name">':''}
   <label>Usuario</label><input id="aU" autocapitalize="none" autocorrect="off" autocomplete="username" placeholder="ej: juanperez">
-  ${reg?'<label>Teléfono (WhatsApp)</label><input id="aT" type="tel" inputmode="tel" autocomplete="tel" placeholder="11 1234 5678">':''}
+  ${reg?'<label>Teléfono (WhatsApp) · obligatorio</label><input id="aT" type="tel" inputmode="tel" autocomplete="tel" placeholder="11 1234 5678"><div class="muted" style="font-size:12px;margin-top:4px">Con característica, sin 0 ni 15. Lo usamos para contactarte por tu pedido.</div>':''}
   <label>Contraseña</label><input id="aP" type="password" autocomplete="${reg?'new-password':'current-password'}" placeholder="${reg?'mínimo 6 caracteres':''}">
   ${reg?'<label>Repetí la contraseña</label><input id="aP2" type="password" autocomplete="new-password">':''}
   <div id="authErr" style="color:#ff6b6b;min-height:20px;margin:10px 0;font-size:14px">${esc(authErr)}</div>
@@ -1030,7 +1038,7 @@ async function doRegister(){
   if(nombre.length<3||!nombre.includes(' ')){setErr('Poné tu nombre y apellido');return}
   if(!/^[a-z0-9._-]{3,20}$/.test(u)){setErr('El usuario: de 3 a 20 letras o números, sin espacios ni tildes');return}
   if(u===ADMIN_USER){setErr('Ese usuario no está disponible');return}
-  if(tk.length<8||String(tel).replace(/\D/g,'').length>15){setErr('Poné un teléfono válido, con característica (ej: 11 1234 5678)');return}
+  if(tk.length<10||String(tel).replace(/\D/g,'').length>15){setErr('Poné tu teléfono completo, con característica y sin 0 ni 15 (ej: 11 1234 5678). Lo necesitamos para contactarte por tu pedido.');return}
   if(p.length<6){setErr('La contraseña tiene que tener al menos 6 caracteres');return}
   if(p!==p2){setErr('Las contraseñas no coinciden');return}
   authBusy=true;REGISTERING=true;busy(true);setErr('');
@@ -1057,6 +1065,7 @@ function openCartCli(){
   if(!S.cart.length){closeModal();return}
   const t=cartTotals(0);
   modal(`<h2>Tu pedido</h2>${S.cart.map((l,i)=>`<div class="card"><div class="nm">${esc(l.n)}</div><div class="muted" style="font-size:12px">Cód. ${esc(l.c)}</div><div class="row" style="margin-top:6px"><div class="q"><button onclick="qty(${i},-1)">−</button><input type="number" inputmode="decimal" value="${l.q}" onchange="qtySet(${i},this.value)"><button onclick="qty(${i},1)">+</button></div><span style="flex:1"></span><span class="muted">${money(l.p)} c/u</span><b style="width:86px;text-align:right">${money(l.q*l.p)}</b><button class="btn bad sm" onclick="rm(${i})">✕</button></div></div>`).join('')}
+  ${telKey(CLIENT&&CLIENT.tel).length>=10?'':`<label>Tu teléfono (WhatsApp) · obligatorio</label><input id="ptel" type="tel" inputmode="tel" autocomplete="tel" placeholder="11 1234 5678"><div class="muted" style="font-size:12px;margin-top:4px">Con característica, sin 0 ni 15. Es para contactarte por este pedido.</div>`}
   <label>Aclaración (opcional)</label><input id="pnote" placeholder="Ej: retiro mañana por la tarde">
   <div class="tot"><span>Total</span><span>${money(t.total)}</span></div>
   <p class="muted" style="margin-top:-6px">Se guarda en tu cuenta y se lo mandás a Ema por WhatsApp. Ella confirma el precio final y la entrega.</p>
@@ -1065,10 +1074,12 @@ function openCartCli(){
 async function enviarPedido(){
   if(!S.cart.length||ROLE!=='cliente')return;
   const note=(($('#pnote')||{}).value||'').trim();
+  let tel=CLIENT.tel;
+  if(telKey(tel).length<10){const v=(($('#ptel')||{}).value||'').trim();if(telKey(v).length<10){toast('Poné tu teléfono completo (con característica) para que podamos contactarte');const e=$('#ptel');if(e)e.focus();return}tel=v}
   const items=S.cart.map(l=>({c:l.c,n:l.n,q:l.q,p:l.p})),total=cartTotals(0).total;
   const txt=`Hola SHR Garage & Tools, soy ${CLIENT.nombre} (usuario ${CLIENT.usuario}). Quiero hacer este pedido:\n`+items.map(i=>`• ${i.q} x ${i.n} (cód. ${i.c}) — ${money(i.p*i.q)}`).join('\n')+`\nTotal: ${money(total)}`+(note?`\nNota: ${note}`:'');
   let ok=true;
-  try{await X.add('ventas',{uid:CLIENT.uid,usuario:CLIENT.usuario,nombre:CLIENT.nombre,tel:CLIENT.tel,tipo:'pedido',estado:'nuevo',fecha:new Date().toISOString(),items,total,nota:note})}catch(e){ok=false}
+  try{await X.add('ventas',{uid:CLIENT.uid,usuario:CLIENT.usuario,nombre:CLIENT.nombre,tel:tel,tipo:'pedido',estado:'nuevo',fecha:new Date().toISOString(),items,total,nota:note})}catch(e){ok=false}
   if(ok)avisarPedido(items,total);
   S.cart=[];save();renderCartBar();
   modal(`<h2>${ok?'✅ Pedido guardado':'⚠️ No se pudo guardar el pedido'}</h2><p>${ok?'Ahora mandáselo a Ema por WhatsApp para coordinar.':'Igual podés mandarlo por WhatsApp.'}</p><a target="_blank" rel="noopener" href="https://wa.me/${WA_NUM}?text=${encodeURIComponent(txt)}" style="display:block;text-align:center;text-decoration:none;background:#25d366;color:#06361a;font-weight:800;border-radius:10px;padding:14px;text-transform:uppercase">Enviar por WhatsApp</a><div class="row" style="margin-top:10px"><button class="btn sec" style="flex:1" onclick="closeModal();render()">Cerrar</button></div>`);
@@ -1082,7 +1093,7 @@ function vMis(){
 function verCompra(id){
   const v=VENTAS_C.find(x=>x.id===id);if(!v)return;
   if(ROLE==='admin')marcarVisto(id);
-  modal(`<h2>${v.tipo==='pedido'?'Pedido':'Compra'} del ${new Date(v.fecha).toLocaleDateString('es-AR')}</h2>${v.nombre&&ROLE==='admin'?`<div class="muted">${esc(v.nombre)} · @${esc(v.usuario)}</div>`:''}<div class="muted" style="margin:4px 0 8px">${esc(estTxt(v))}${v.pago?' · '+esc(v.pago):''}${ROLE==='admin'&&v.pasadoEG?' · <b style="color:var(--ok)">✅ Pasado a EG Import Tool ('+fmtF(v.pasadoEG)+')</b>':''}</div>${v.items.map(i=>`<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><span style="flex:1">${i.q} × ${esc(i.n)}<br><small class="muted">Cód. ${esc(i.c)}</small></span><b>${money(i.p*i.q)}</b></div>`).join('')}${v.desc?`<div class="muted" style="margin-top:6px">Descuento ${v.desc}%</div>`:''}<div class="tot"><span>Total</span><span>${money(v.total)}</span></div>${ROLE==='cliente'&&v.tipo==='pedido'&&v.estado==='preparacion'?'<div class="card" style="border-color:var(--yel)">🧰 Tu pedido ya se está preparando, por eso no se puede modificar. Si necesitás un cambio, escribinos por WhatsApp.</div>':''}${v.nota?`<div class="muted">Nota: ${esc(v.nota)}</div>`:''}${v.editado?`<div class="muted" style="margin-top:4px">✎ Editado el ${fmtF(v.editado)} por ${v.editadoPor==='admin'?'el comercio':'el cliente'}</div>`:''}<div class="row" style="margin-top:10px">${editable(v)?`<button class="btn" onclick="abrirEditor('${esc(v.id)}')">✎ Editar pedido</button>`:''}${(ROLE==='admin'||(v.tipo==='pedido'&&(v.estado==='nuevo'||v.estado==='cancelado')))?`<button class="btn bad" onclick="delPedido('${esc(v.id)}')">🗑 Eliminar</button>`:''}<button class="btn sec" style="flex:1" onclick="closeModal()">Cerrar</button></div>${ROLE==='admin'&&v.tipo==='pedido'&&v.estado==='nuevo'?`<div style="margin-top:8px"><button class="btn" style="width:100%" onclick="closeModal();pasarPreparacion('${esc(v.id)}')">🧰 Pasar a preparación (baja el PDF)</button></div>`:''}${ROLE==='admin'&&v.tipo==='pedido'&&v.estado==='preparacion'?`<div style="margin-top:8px"><button class="btn sec" style="width:100%" onclick="pdfCompra('${esc(v.id)}')">⬇️ Descargar PDF del pedido</button></div>`:''}${ROLE==='admin'&&v.tipo==='pedido'?`<div style="margin-top:8px"><button class="btn ${v.pasadoEG?'sec':''}" style="width:100%" onclick="togglePasadoEG('${esc(v.id)}')">${v.pasadoEG?'✅ Pasado a EG Import Tool · tocá para deshacer':'📤 Pedido pasado a EG Import Tool'}</button></div>`:''}<div style="margin-top:8px"><button class="btn sec sm" style="width:100%" onclick="csvCompra('${esc(v.id)}')">⬇️ Descargar CSV con códigos</button></div>`);
+  modal(`<h2>${v.tipo==='pedido'?'Pedido':'Compra'} del ${new Date(v.fecha).toLocaleDateString('es-AR')}</h2>${v.nombre&&ROLE==='admin'?`<div class="muted">${esc(v.nombre)} · @${esc(v.usuario)}${v.tel?' · 📞 '+esc(v.tel):''}</div>${waCliente(v)?`<a class="btn sm" style="display:inline-block;text-decoration:none;margin:6px 0" target="_blank" rel="noopener" href="${waCliente(v)}">💬 Escribirle por WhatsApp</a>`:''}`:''}<div class="muted" style="margin:4px 0 8px">${esc(estTxt(v))}${v.pago?' · '+esc(v.pago):''}${ROLE==='admin'&&v.pasadoEG?' · <b style="color:var(--ok)">✅ Pasado a EG Import Tool ('+fmtF(v.pasadoEG)+')</b>':''}</div>${v.items.map(i=>`<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><span style="flex:1">${i.q} × ${esc(i.n)}<br><small class="muted">Cód. ${esc(i.c)}</small></span><b>${money(i.p*i.q)}</b></div>`).join('')}${v.desc?`<div class="muted" style="margin-top:6px">Descuento ${v.desc}%</div>`:''}<div class="tot"><span>Total</span><span>${money(v.total)}</span></div>${ROLE==='cliente'&&v.tipo==='pedido'&&v.estado==='preparacion'?'<div class="card" style="border-color:var(--yel)">🧰 Tu pedido ya se está preparando, por eso no se puede modificar. Si necesitás un cambio, escribinos por WhatsApp.</div>':''}${v.nota?`<div class="muted">Nota: ${esc(v.nota)}</div>`:''}${v.editado?`<div class="muted" style="margin-top:4px">✎ Editado el ${fmtF(v.editado)} por ${v.editadoPor==='admin'?'el comercio':'el cliente'}</div>`:''}<div class="row" style="margin-top:10px">${editable(v)?`<button class="btn" onclick="abrirEditor('${esc(v.id)}')">✎ Editar pedido</button>`:''}${(ROLE==='admin'||(v.tipo==='pedido'&&(v.estado==='nuevo'||v.estado==='cancelado')))?`<button class="btn bad" onclick="delPedido('${esc(v.id)}')">🗑 Eliminar</button>`:''}<button class="btn sec" style="flex:1" onclick="closeModal()">Cerrar</button></div>${ROLE==='admin'&&v.tipo==='pedido'&&v.estado==='nuevo'?`<div style="margin-top:8px"><button class="btn" style="width:100%" onclick="closeModal();pasarPreparacion('${esc(v.id)}')">🧰 Pasar a preparación (baja el PDF)</button></div>`:''}${ROLE==='admin'&&v.tipo==='pedido'&&v.estado==='preparacion'?`<div style="margin-top:8px"><button class="btn sec" style="width:100%" onclick="pdfCompra('${esc(v.id)}')">⬇️ Descargar PDF del pedido</button></div>`:''}${ROLE==='admin'&&v.tipo==='pedido'?`<div style="margin-top:8px"><button class="btn ${v.pasadoEG?'sec':''}" style="width:100%" onclick="togglePasadoEG('${esc(v.id)}')">${v.pasadoEG?'✅ Pasado a EG Import Tool · tocá para deshacer':'📤 Pedido pasado a EG Import Tool'}</button></div>`:''}<div style="margin-top:8px"><button class="btn sec sm" style="width:100%" onclick="csvCompra('${esc(v.id)}')">⬇️ Descargar CSV con códigos</button></div>`);
 }
 /* ---------- editar un pedido (cliente y administrador) ---------- */
 function abrirEditor(id){
@@ -1152,7 +1163,7 @@ function pedidoRow(v){
   const nuevo=v.estado==='nuevo';
   return `<div style="border-top:1px solid var(--line);padding:8px 0"><div class="row"><span style="flex:1"><b>${new Date(v.fecha).toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'})}</b> <span class="tag ${v.estado==='entregado'?'ok':''}">${esc(estTxt(v))}</span>${sinVer(v)?' <span class="tag new">sin ver</span>':''}${v.pasadoEG?' <span class="tag ok">EG Import Tool</span>':''}</span><b style="color:var(--yel)">${money(v.total)}</b></div>
   <div class="muted" style="margin:2px 0 6px">${v.items.map(i=>i.q+'× '+esc(i.n)+' <b>['+esc(i.c)+']</b>').slice(0,3).join(' · ')}${v.items.length>3?' · +'+(v.items.length-3)+' más':''}${v.nota?' — “'+esc(v.nota)+'”':''}</div>
-  <div class="row" style="flex-wrap:wrap"><button class="btn sec sm" onclick="verCompra('${esc(v.id)}')">Ver</button>${nuevo?`<button class="btn sm" onclick="abrirEditor('${esc(v.id)}')">✎ Editar</button><button class="btn sm" onclick="pasarPreparacion('${esc(v.id)}')">🧰 En preparación</button><button class="btn sec sm" onclick="setEstado('${esc(v.id)}','entregado')">Entregado</button><button class="btn bad sm" onclick="setEstado('${esc(v.id)}','cancelado')">Cancelar</button>`:''}${v.estado==='preparacion'?`<button class="btn sec sm" onclick="pdfCompra('${esc(v.id)}')">⬇️ PDF</button><button class="btn sec sm" onclick="setEstado('${esc(v.id)}','entregado')">Entregado</button><button class="btn sec sm" onclick="volverANuevo('${esc(v.id)}')">↩ Volver a nuevo</button><button class="btn bad sm" onclick="setEstado('${esc(v.id)}','cancelado')">Cancelar</button>`:''}<button class="btn bad sm" onclick="delPedido('${esc(v.id)}')">🗑 Eliminar</button></div></div>`;
+  <div class="row" style="flex-wrap:wrap"><button class="btn sec sm" onclick="verCompra('${esc(v.id)}')">Ver</button>${waCliente(v)?`<a class="btn sec sm" style="text-decoration:none" target="_blank" rel="noopener" href="${waCliente(v)}">💬 WhatsApp</a>`:''}${nuevo?`<button class="btn sm" onclick="abrirEditor('${esc(v.id)}')">✎ Editar</button><button class="btn sm" onclick="pasarPreparacion('${esc(v.id)}')">🧰 En preparación</button><button class="btn sec sm" onclick="setEstado('${esc(v.id)}','entregado')">Entregado</button><button class="btn bad sm" onclick="setEstado('${esc(v.id)}','cancelado')">Cancelar</button>`:''}${v.estado==='preparacion'?`<button class="btn sec sm" onclick="pdfCompra('${esc(v.id)}')">⬇️ PDF</button><button class="btn sec sm" onclick="setEstado('${esc(v.id)}','entregado')">Entregado</button><button class="btn sec sm" onclick="volverANuevo('${esc(v.id)}')">↩ Volver a nuevo</button><button class="btn bad sm" onclick="setEstado('${esc(v.id)}','cancelado')">Cancelar</button>`:''}<button class="btn bad sm" onclick="delPedido('${esc(v.id)}')">🗑 Eliminar</button></div></div>`;
 }
 function pintarCli(){
   const t=termsOf(qCli),G=gruposClientes().filter(g=>{const h=norm(g.c.nombre+' '+g.c.usuario+' '+g.c.tel);return t.every(x=>h.includes(x))});
@@ -1189,6 +1200,10 @@ function delPedido(id){
   if(ROLE!=='admin'&&!(v.tipo==='pedido'&&(v.estado==='nuevo'||v.estado==='cancelado'))){toast('Este pedido ya no se puede eliminar');return}
   ask('¿Eliminar este pedido del '+new Date(v.fecha).toLocaleDateString('es-AR')+' ('+money(v.total)+')?\nNo se puede deshacer.','Eliminar',async()=>{
     try{await X.batchDel(['ventas/'+id]);closeModal();toast('Pedido eliminado')}catch(e){toast('No pude eliminar el pedido')}},true);
+}
+function waCliente(v){
+  const k=telKey(v&&v.tel);if(k.length<10)return '';
+  return 'https://wa.me/549'+k+'?text='+encodeURIComponent('Hola '+((v.nombre||'').split(' ')[0]||'')+', te escribo de '+S.cfg.nombre+' por tu pedido del '+new Date(v.fecha).toLocaleDateString('es-AR')+'.');
 }
 function pasarPreparacion(id){
   const v=VENTAS_C.find(x=>x.id===id);if(!v||ROLE!=='admin')return;
