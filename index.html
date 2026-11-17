@@ -169,7 +169,7 @@ nav button.on b{animation:pop .35s ease}
 <div id="printHost" style="display:none"></div>
 
 <script>
-const APP_VERSION='2.14.0';
+const APP_VERSION='2.14.1';
 const WA_NUM='5491165366884',WA_TXT='Hola SHR Garage & Tools, quería consultar por un producto.';
 /* Configuración fija del negocio (igual en todos los equipos). Se completa al publicar la app. */
 const FIXED=null;
@@ -760,8 +760,8 @@ function ntfy(titulo,texto){
     return fetch(NTFY_URL+NTFY_TOPIC+'?title='+encodeURIComponent(titulo)+'&priority=high&tags=shopping_cart&click='+encodeURIComponent(location.origin+location.pathname),{method:'POST',body:texto,keepalive:true}).then(r=>r.ok).catch(()=>false);
   }catch(e){return Promise.resolve(false)}
 }
-function avisarPedido(items,total){const n=items.reduce((a,i)=>a+(i.q||0),0);ntfy('🛒 Nuevo pedido',items.length+' producto'+(items.length===1?'':'s')+' ('+n+' unidades) · '+money(total))}
-async function probarAviso(){const b=$('#ntfyBtn');if(b){b.disabled=true;b.textContent='Enviando…'}const ok=await ntfy('🛒 Prueba de aviso','Si ves esto en el teléfono, los avisos de pedidos ya funcionan.');if(b){b.disabled=false;b.textContent='Enviar aviso de prueba'}toast(ok?'Enviado: mirá el teléfono':'No se pudo enviar. Revisá tu internet')}
+function avisarPedido(items,total){const n=items.reduce((a,i)=>a+(i.q||0),0);ntfy('Nuevo pedido',items.length+' producto'+(items.length===1?'':'s')+' ('+n+' unidades) · '+money(total))}
+async function probarAviso(){const b=$('#ntfyBtn');if(b){b.disabled=true;b.textContent='Enviando…'}const ok=await ntfy('Prueba de aviso','Si ves esto en el teléfono, los avisos de pedidos ya funcionan.');if(b){b.disabled=false;b.textContent='Enviar aviso de prueba'}toast(ok?'Enviado: mirá el teléfono':'No se pudo enviar. Revisá tu internet')}
 function avisosCard(){return `<div class="card"><h3 style="margin:0 0 6px">🔔 Avisos de pedidos al teléfono</h3>
   <p class="muted" style="margin:0 0 8px">Cuando un cliente envía un pedido te suena el teléfono, aunque la app esté cerrada. Es gratis.</p>
   <ol style="margin:0 0 10px;padding-left:20px;line-height:1.5"><li>Instalá la app <b>ntfy</b> en el teléfono (Play Store o App Store).</li><li>Tocá <b>+</b> y suscribite al tema:<br><b style="color:var(--yel);user-select:all;overflow-wrap:anywhere">${NTFY_TOPIC}</b></li><li>Permití las notificaciones y tocá el botón de abajo.</li></ol>
