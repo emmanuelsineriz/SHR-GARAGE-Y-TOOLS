@@ -95,6 +95,18 @@ def diagnostico(html_text):
     except Exception as e:
         print('DIAG error:',e)
 
+def bajar_novedades(s):
+    """Pide el listado 'NOVEDADES' de elgasolero.com (categoría 88888 del menú) y lo devuelve en el mismo orden que la página.
+    Si algo falla devuelve None (y se conserva el listado anterior)."""
+    try:
+        r=s.get(BASE+'catalogo2024.php?rub=88888',timeout=120)
+        texto=decodificar(r)
+        if r.status_code!=200 or 'No tienes acceso' in texto:return None
+        prods,_=parse(texto)
+        return prods or None
+    except Exception as e:
+        print('No pude pedir Novedades:',e);return None
+
 def falla(estado,msg):
     json.dump({'ok':False,'error':msg,'fecha':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())},open(estado,'w',encoding='utf-8'),ensure_ascii=False)
     sys.exit('ERROR: '+msg)
@@ -119,6 +131,16 @@ def main():
     prods,seen=parse(texto)
     print(f'Leí {len(prods)} productos con precio ({seen} bloques).')
     if len(prods)<MIN_PRODUCTOS:falla(estado,f'Solo pude leer {len(prods)} productos: la página cambió o la clave no abrió el catálogo. No se actualizó nada.')
+    # listado de Novedades de la página (mismo orden que en elgasolero.com)
+    nov_prods=bajar_novedades(s)
+    if nov_prods:
+        _en={x['c'] for x in prods}
+        prods+=[x for x in nov_prods if x['c'] not in _en]
+        nov_codes=[x['c'] for x in nov_prods]
+        print(f'Novedades de la página: {len(nov_codes)} productos.')
+    else:
+        nov_codes=None
+        print('No pude leer el listado de Novedades: se conserva el anterior.')
     prods.sort(key=lambda x:(x['r'],x['n'],x['c']))
     # fecha de alta ('a'): un producto que aparece por primera vez en el catálogo se marca con la fecha Y HORA de ese momento
     # (así lo último que entra queda primero en "Novedades"). Los que ya estaban conservan su marca (o ninguna).
@@ -138,13 +160,15 @@ def main():
             elif _alta.get(x['c']):x['a']=_alta[x['c']]
     vistos|={x['c'] for x in prods}
     nuevo={'productos':[{k:v for k,v in x.items() if k!='f'} for x in prods],'fotos':{x['c']:x['f'] for x in prods if x['f']>1}}
+    _novs=nov_codes if nov_codes is not None else (_ant_all.get('novedades') if isinstance(_ant_all,dict) else None)
+    if _novs is not None:nuevo['novedades']=_novs
     ahora=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())
     if os.path.exists(salida):
         try:
             ant=json.load(open(salida,encoding='utf-8'))
             n_ant=len(ant.get('productos',[]))
             if n_ant and len(prods)<n_ant*(1-MAX_CAIDA):falla(estado,f'Antes había {n_ant} productos y ahora {len(prods)}. No se actualizó nada, revisar.')
-            if ant.get('productos')==nuevo['productos'] and ant.get('fotos')==nuevo['fotos']:
+            if ant.get('productos')==nuevo['productos'] and ant.get('fotos')==nuevo['fotos'] and ant.get('novedades')==nuevo.get('novedades'):
                 print('Sin cambios de precios.')
                 json.dump({'ok':True,'verificado':ahora,'productos':len(prods)},open(estado,'w',encoding='utf-8'));return
         except (ValueError,OSError):pass
