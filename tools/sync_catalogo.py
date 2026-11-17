@@ -90,18 +90,23 @@ def main():
     print(f'Leí {len(prods)} productos con precio ({seen} bloques).')
     if len(prods)<MIN_PRODUCTOS:falla(estado,f'Solo pude leer {len(prods)} productos: la página cambió o la clave no abrió el catálogo. No se actualizó nada.')
     prods.sort(key=lambda x:(x['r'],x['n'],x['c']))
-    # fecha de alta ('a'): un producto que no estaba en el catálogo anterior se marca con la fecha de hoy (para "Novedades").
-    # Los que ya estaban conservan su fecha (o ninguna). Si no hay catálogo anterior, no se marca ninguno.
-    hoy=time.strftime('%Y-%m-%d',time.gmtime())
+    # fecha de alta ('a'): un producto que aparece por primera vez en el catálogo se marca con la fecha Y HORA de ese momento
+    # (así lo último que entra queda primero en "Novedades"). Los que ya estaban conservan su marca (o ninguna).
+    # 'vistos' recuerda todos los códigos que alguna vez estuvieron: si un producto desaparece de la página y vuelve, no cuenta como novedad.
+    # Si no hay catálogo anterior, no se marca ninguno.
+    ahora_a=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())
     try:
-        _ant=json.load(open(salida,encoding='utf-8')).get('productos',[])
-    except (ValueError,OSError):
-        _ant=[]
+        _ant_all=json.load(open(salida,encoding='utf-8'))
+        _ant=_ant_all.get('productos',[])
+    except (ValueError,OSError,AttributeError):
+        _ant_all,_ant={},[]
+    vistos=set(_ant_all.get('vistos') or [])|{x['c'] for x in _ant}
     if _ant:
         _alta={x['c']:x.get('a') for x in _ant}
         for x in prods:
-            if x['c'] not in _alta:x['a']=hoy
-            elif _alta[x['c']]:x['a']=_alta[x['c']]
+            if x['c'] not in vistos:x['a']=ahora_a
+            elif _alta.get(x['c']):x['a']=_alta[x['c']]
+    vistos|={x['c'] for x in prods}
     nuevo={'productos':[{k:v for k,v in x.items() if k!='f'} for x in prods],'fotos':{x['c']:x['f'] for x in prods if x['f']>1}}
     ahora=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())
     if os.path.exists(salida):
@@ -113,6 +118,7 @@ def main():
                 print('Sin cambios de precios.')
                 json.dump({'ok':True,'verificado':ahora,'productos':len(prods)},open(estado,'w',encoding='utf-8'));return
         except (ValueError,OSError):pass
+    nuevo['vistos']=sorted(vistos)
     nuevo['actualizado']=ahora
     json.dump(nuevo,open(salida,'w',encoding='utf-8'),ensure_ascii=False,separators=(',',':'))
     json.dump({'ok':True,'verificado':ahora,'productos':len(prods)},open(estado,'w',encoding='utf-8'))
