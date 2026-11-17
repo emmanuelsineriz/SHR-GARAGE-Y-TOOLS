@@ -152,6 +152,7 @@ nav button.on b{animation:pop .35s ease}
 .rubsel>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.novbtn small{opacity:.8;margin-left:2px}
 #todos{scroll-margin-top:200px}
 .warow.ok{border-left:4px solid var(--ok)}.warow.warn{border-left:4px solid var(--yel)}.warow.bad{border-left:4px solid var(--bad)}.waq{width:64px;text-align:center;padding:7px 4px}
+.balr{display:grid;grid-template-columns:1.5fr .6fr 1fr 1fr 1fr;gap:6px;padding:7px 2px;border-top:1px solid var(--line);font-size:13px;align-items:center}.balr span:nth-child(n+2),.balr b{text-align:right}.balr.bh{border-top:0;color:var(--mut);font-size:11px;text-transform:uppercase}.balr.bt{background:var(--panel2);font-weight:800;border-radius:6px}
 .tag.new{background:var(--yel);color:#1b1b1d;border-color:var(--yel);font-weight:800}
 .rubrow{display:flex;gap:8px;margin-top:8px}.rubrow .rubsel{margin-top:0;flex:1}
 .novbtn{flex:none;background:var(--panel);color:var(--yel);border:1px solid var(--yel);border-radius:var(--r);padding:0 14px;font:inherit;font-weight:800}.novbtn.on{background:var(--yel);color:#1b1b1d}
@@ -169,7 +170,7 @@ nav button.on b{animation:pop .35s ease}
 <div id="printHost" style="display:none"></div>
 
 <script>
-const APP_VERSION='2.18.0';
+const APP_VERSION='2.19.0';
 const WA_NUM='5491165366884',WA_TXT='Hola SHR Garage & Tools, quería consultar por un producto.';
 /* Configuración fija del negocio (igual en todos los equipos). Se completa al publicar la app. */
 const FIXED=null;
@@ -544,15 +545,51 @@ function openFoto(c){
   <div class="row"><button class="btn sec" onclick="closeModal()">Cerrar</button><button class="btn" style="flex:1" onclick="addToCart('${esc(p.c)}')">${ROLE==='invitado'?'Registrate para pedir':'+ Agregar al carrito'}</button></div></div>`);
 }
 function lbSet(el,i,c){$('#lbimg').src=photoUrl(c,i);document.querySelectorAll('.lb .th img').forEach(x=>x.classList.remove('on'));el.classList.add('on')}
+/* ---------- ventas unificadas: mostrador (este equipo) + pedidos entregados (nube) ---------- */
+const diaKey=f=>{const d=new Date(f);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+function costoPedido(v){return (v.items||[]).reduce((a,i,k)=>{const c=(v.costos&&v.costos[k]!=null)?+v.costos[k]:(find(i.c)?costo(find(i.c)):i.p);return a+c*(i.q||0)},0)}
+function ventasUnificadas(){
+  const loc=S.ventas.filter(v=>!v.anulada).map(v=>({ref:'v',id:v.id,fecha:v.fecha,total:v.total,costo:v.items.reduce((a,i)=>a+(i.costo||0)*i.q,0),pago:v.pago||'—'}));
+  const ped=VENTAS_C.filter(v=>v.tipo==='pedido'&&v.estado==='entregado').map(v=>({ref:'p',id:v.id,fecha:v.entregadoEn||v.fecha,total:v.total,costo:costoPedido(v),pago:v.pago||'—'}));
+  return loc.concat(ped);
+}
+let BAL='dia';
+function setBal(v){BAL=v;vVentas()}
+function balanceFilas(U){
+  const g={};
+  U.forEach(x=>{const k=BAL==='mes'?diaKey(x.fecha).slice(0,7):diaKey(x.fecha);const r=g[k]||(g[k]={k,n:0,tot:0,cos:0});r.n++;r.tot+=x.total;r.cos+=x.costo});
+  return Object.values(g).sort((a,b)=>b.k.localeCompare(a.k));
+}
+function balEtiqueta(k){
+  const q=k.split('-').map(Number);
+  return BAL==='mes'?new Date(q[0],q[1]-1,1).toLocaleDateString('es-AR',{month:'long',year:'numeric'}):new Date(q[0],q[1]-1,q[2]).toLocaleDateString('es-AR',{weekday:'short',day:'2-digit',month:'2-digit'});
+}
+function balanceHtml(U){
+  const F=balanceFilas(U).slice(0,BAL==='mes'?24:62),adm=isAdmin();
+  const T=F.reduce((a,r)=>({n:a.n+r.n,tot:a.tot+r.tot,cos:a.cos+r.cos}),{n:0,tot:0,cos:0});
+  const fila=(et,r,b)=>`<div class="balr${b?' bt':''}"><span>${et}</span><span>${r.n}</span><span>${money(r.tot)}</span><span>${adm?money(r.cos):'🔒'}</span><b style="color:var(--ok)">${adm?money(r.tot-r.cos):'🔒'}</b></div>`;
+  return `<div class="row" style="margin:16px 2px 6px"><h3 style="margin:0;flex:1">Balance</h3><div class="seg"><button class="${BAL==='dia'?'on':''}" onclick="setBal('dia')">Por día</button><button class="${BAL==='mes'?'on':''}" onclick="setBal('mes')">Por mes</button></div></div>
+  <div class="card" style="padding:6px 10px"><div class="balr bh"><span>${BAL==='mes'?'Mes':'Día'}</span><span>Ventas</span><span>Vendido</span><span>Costo</span><span>Ganancia</span></div>${F.length?F.map(r=>fila(esc(balEtiqueta(r.k)),r)).join('')+fila('Total',T,true):'<div class="empty">Todavía no hay ventas.</div>'}</div>
+  ${F.length?`<button class="btn sec sm" style="width:100%" onclick="csvBalance()">⬇️ Descargar balance (CSV)</button>`:''}`;
+}
+function csvBalance(){
+  const q=v=>'"'+String(v).replace(/"/g,'""')+'"',d=v=>String(Math.round(v*100)/100).replace('.',',');
+  const L=[['Período','Ventas','Vendido','Costo','Ganancia'].join(';')];
+  balanceFilas(ventasUnificadas()).forEach(r=>L.push([q(balEtiqueta(r.k)),r.n,d(r.tot),d(r.cos),d(r.tot-r.cos)].join(';')));
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['﻿'+L.join('\r\n')],{type:'text/csv;charset=utf-8'}));a.download='balance_'+(BAL==='mes'?'mensual':'diario')+'_'+new Date().toISOString().slice(0,10)+'.csv';document.body.appendChild(a);a.click();a.remove();
+}
 function vVentas(){
-  const hoy=new Date().toDateString();
-  const vs=S.ventas.slice().reverse();
-  const dia=vs.filter(v=>new Date(v.fecha).toDateString()===hoy&&!v.anulada);
-  const tot=dia.reduce((a,v)=>a+v.total,0);
-  const gan=dia.reduce((a,v)=>a+v.items.reduce((s,i)=>s+(i.p*(1-(v.desc||0)/100)-i.costo)*i.q,0),0);
+  const U=ventasUnificadas(),hoyK=diaKey(new Date()),mesK=hoyK.slice(0,7),adm=isAdmin();
+  const dia=U.filter(x=>diaKey(x.fecha)===hoyK),mes=U.filter(x=>diaKey(x.fecha).slice(0,7)===mesK);
+  const sum=L=>L.reduce((a,x)=>({t:a.t+x.total,c:a.c+x.costo}),{t:0,c:0}),D=sum(dia),M=sum(mes);
   const por={};dia.forEach(v=>por[v.pago]=(por[v.pago]||0)+v.total);
-  $('#main').innerHTML=`<div class="grid2"><div class="kpi"><small>Hoy</small><div>${money(tot)}</div></div><div class="kpi" ${isAdmin()?'':'onclick="requireAdmin(render)"'}><small>Ganancia estimada</small><div>${isAdmin()?money(gan):'🔒'}</div></div><div class="kpi"><small>Ventas hoy</small><div>${dia.length}</div></div><div class="kpi"><small>${Object.keys(por).map(k=>k).join(' / ')||'Medios de pago'}</small><div style="font-size:14px">${Object.entries(por).map(([k,v])=>k+' '+money(v)).join('<br>')||'—'}</div></div></div>
-  <h3 style="margin:16px 2px 4px">Historial</h3>`+(vs.length?vs.slice(0,200).map(v=>`<div class="card" onclick="verVenta(${v.id})" style="${v.anulada?'opacity:.5':''}"><div class="row"><b>#${String(v.n).padStart(5,'0')}</b><span class="muted" style="flex:1">${new Date(v.fecha).toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'})} · ${esc(v.pago)}${v.cliente?' · '+esc(v.cliente):''}${v.anulada?' · ANULADA':''}</span><b style="color:var(--yel)">${money(v.total)}</b></div><div class="muted" style="font-size:12px;margin-top:3px">${v.items.slice(0,6).map(i=>i.q+'× '+esc(i.c)).join(' · ')}${v.items.length>6?' · +'+(v.items.length-6)+' más':''}</div></div>`).join(''):'<div class="empty">Todavía no hay ventas.</div>');
+  const hist=S.ventas.map(v=>({ref:'v',v,fecha:v.fecha})).concat(VENTAS_C.filter(v=>v.tipo==='pedido'&&v.estado==='entregado').map(v=>({ref:'p',v,fecha:v.entregadoEn||v.fecha}))).sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)));
+  const cods=items=>`<div class="muted" style="font-size:12px;margin-top:3px">${items.slice(0,6).map(i=>i.q+'× '+esc(i.c)).join(' · ')}${items.length>6?' · +'+(items.length-6)+' más':''}</div>`;
+  $('#main').innerHTML=`<div class="grid2"><div class="kpi"><small>Hoy</small><div>${money(D.t)}</div></div><div class="kpi"><small>Ganancia de hoy</small><div>${adm?money(D.t-D.c):'🔒'}</div></div><div class="kpi"><small>Este mes</small><div>${money(M.t)}</div></div><div class="kpi"><small>Ganancia del mes</small><div>${adm?money(M.t-M.c):'🔒'}</div></div><div class="kpi"><small>Ventas hoy</small><div>${dia.length}</div></div><div class="kpi"><small>${Object.keys(por).map(k=>k).join(' / ')||'Medios de pago'}</small><div style="font-size:14px">${Object.entries(por).map(([k,v])=>k+' '+money(v)).join('<br>')||'—'}</div></div></div>
+  ${balanceHtml(U)}
+  <h3 style="margin:16px 2px 4px">Historial</h3>`+(hist.length?hist.slice(0,200).map(h=>{
+    if(h.ref==='v'){const v=h.v;return `<div class="card" onclick="verVenta(${v.id})" style="${v.anulada?'opacity:.5':''}"><div class="row"><b>#${String(v.n).padStart(5,'0')}</b><span class="muted" style="flex:1">${new Date(v.fecha).toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'})} · ${esc(v.pago)}${v.cliente?' · '+esc(v.cliente):''}${v.anulada?' · ANULADA':''}</span><b style="color:var(--yel)">${money(v.total)}</b></div>${cods(v.items)}</div>`}
+    const v=h.v;return `<div class="card" onclick="verCompra('${esc(v.id)}')"><div class="row"><b>📦 Pedido</b><span class="muted" style="flex:1">${fmtF(h.fecha)} · ${esc(v.pago||'—')} · ${esc(v.nombre||'')}</span><b style="color:var(--yel)">${money(v.total)}</b></div>${cods(v.items)}</div>`}).join(''):'<div class="empty">Todavía no hay ventas.</div>');
 }
 function vConfig(){
   const c=S.cfg;
@@ -939,7 +976,7 @@ const cfgFail=()=>{cfgReady=true;render()};
 function startAdmin(){
   UNSUB.push(X.watch('config/app',d=>{if(d&&d.upd!==myUpd)applyCloud(d);else if(!d)pushNow(true);const first=!cfgReady;cfgReady=true;if(first)render()},()=>{cfgReady=true;toast('Sin conexión con la nube')}));
   UNSUB.push(X.watchColl('users',null,null,l=>{CLIENTES=l.sort((a,b)=>String(a.nombre).localeCompare(String(b.nombre),'es'));if(tab==='clientes'&&!$('#modalHost').innerHTML)render();else nav()},()=>{}));
-  UNSUB.push(X.watchColl('ventas',null,null,l=>{VENTAS_C=l.sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)));avisoPedidos();if(tab==='clientes'&&!$('#modalHost').innerHTML)render();else nav()},()=>{}));
+  UNSUB.push(X.watchColl('ventas',null,null,l=>{VENTAS_C=l.sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)));avisoPedidos();if((tab==='clientes'||tab==='ventas')&&!$('#modalHost').innerHTML)render();else nav()},()=>{}));
 }
 /* aviso de pedidos nuevos al administrador (aunque el cliente no mande el WhatsApp) */
 let PED_SEEN=null;
@@ -1093,7 +1130,7 @@ function vMis(){
 function verCompra(id){
   const v=VENTAS_C.find(x=>x.id===id);if(!v)return;
   if(ROLE==='admin')marcarVisto(id);
-  modal(`<h2>${v.tipo==='pedido'?'Pedido':'Compra'} del ${new Date(v.fecha).toLocaleDateString('es-AR')}</h2>${v.nombre&&ROLE==='admin'?`<div class="muted">${esc(v.nombre)} · @${esc(v.usuario)}${v.tel?' · 📞 '+esc(v.tel):''}</div>${waCliente(v)?`<a class="btn sm" style="display:inline-block;text-decoration:none;margin:6px 0" target="_blank" rel="noopener" href="${waCliente(v)}">💬 Escribirle por WhatsApp</a>`:''}`:''}<div class="muted" style="margin:4px 0 8px">${esc(estTxt(v))}${v.pago?' · '+esc(v.pago):''}${ROLE==='admin'&&v.pasadoEG?' · <b style="color:var(--ok)">✅ Pasado a EG Import Tool ('+fmtF(v.pasadoEG)+')</b>':''}</div>${v.items.map(i=>`<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><span style="flex:1">${i.q} × ${esc(i.n)}<br><small class="muted">Cód. ${esc(i.c)}</small></span><b>${money(i.p*i.q)}</b></div>`).join('')}${v.desc?`<div class="muted" style="margin-top:6px">Descuento ${v.desc}%</div>`:''}<div class="tot"><span>Total</span><span>${money(v.total)}</span></div>${ROLE==='cliente'&&v.tipo==='pedido'&&v.estado==='preparacion'?'<div class="card" style="border-color:var(--yel)">🧰 Tu pedido ya se está preparando, por eso no se puede modificar. Si necesitás un cambio, escribinos por WhatsApp.</div>':''}${v.nota?`<div class="muted">Nota: ${esc(v.nota)}</div>`:''}${v.editado?`<div class="muted" style="margin-top:4px">✎ Editado el ${fmtF(v.editado)} por ${v.editadoPor==='admin'?'el comercio':'el cliente'}</div>`:''}<div class="row" style="margin-top:10px">${editable(v)?`<button class="btn" onclick="abrirEditor('${esc(v.id)}')">✎ Editar pedido</button>`:''}${(ROLE==='admin'||(v.tipo==='pedido'&&(v.estado==='nuevo'||v.estado==='cancelado')))?`<button class="btn bad" onclick="delPedido('${esc(v.id)}')">🗑 Eliminar</button>`:''}<button class="btn sec" style="flex:1" onclick="closeModal()">Cerrar</button></div>${ROLE==='admin'&&v.tipo==='pedido'&&v.estado==='nuevo'?`<div style="margin-top:8px"><button class="btn" style="width:100%" onclick="closeModal();pasarPreparacion('${esc(v.id)}')">🧰 Pasar a preparación (baja el PDF)</button></div>`:''}${ROLE==='admin'&&v.tipo==='pedido'&&v.estado==='preparacion'?`<div style="margin-top:8px"><button class="btn sec" style="width:100%" onclick="pdfCompra('${esc(v.id)}')">⬇️ Descargar PDF del pedido</button></div>`:''}${ROLE==='admin'&&v.tipo==='pedido'?`<div style="margin-top:8px"><button class="btn ${v.pasadoEG?'sec':''}" style="width:100%" onclick="togglePasadoEG('${esc(v.id)}')">${v.pasadoEG?'✅ Pasado a EG Import Tool · tocá para deshacer':'📤 Pedido pasado a EG Import Tool'}</button></div>`:''}<div style="margin-top:8px"><button class="btn sec sm" style="width:100%" onclick="csvCompra('${esc(v.id)}')">⬇️ Descargar CSV con códigos</button></div>`);
+  modal(`<h2>${v.tipo==='pedido'?'Pedido':'Compra'} del ${new Date(v.fecha).toLocaleDateString('es-AR')}</h2>${v.nombre&&ROLE==='admin'?`<div class="muted">${esc(v.nombre)} · @${esc(v.usuario)}${v.tel?' · 📞 '+esc(v.tel):''}</div>${waCliente(v)?`<a class="btn sm" style="display:inline-block;text-decoration:none;margin:6px 0" target="_blank" rel="noopener" href="${waCliente(v)}">💬 Escribirle por WhatsApp</a>`:''}`:''}<div class="muted" style="margin:4px 0 8px">${esc(estTxt(v))}${v.pago?' · '+esc(v.pago):''}${ROLE==='admin'&&v.pasadoEG?' · <b style="color:var(--ok)">✅ Pasado a EG Import Tool ('+fmtF(v.pasadoEG)+')</b>':''}${ROLE==='admin'&&v.tipo==='pedido'&&v.estado==='entregado'?' · entregado el '+fmtF(v.entregadoEn||v.fecha)+' · ganancia <b style="color:var(--ok)">'+money(v.total-costoPedido(v))+'</b>':''}</div>${v.items.map(i=>`<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><span style="flex:1">${i.q} × ${esc(i.n)}<br><small class="muted">Cód. ${esc(i.c)}</small></span><b>${money(i.p*i.q)}</b></div>`).join('')}${v.desc?`<div class="muted" style="margin-top:6px">Descuento ${v.desc}%</div>`:''}<div class="tot"><span>Total</span><span>${money(v.total)}</span></div>${ROLE==='cliente'&&v.tipo==='pedido'&&v.estado==='preparacion'?'<div class="card" style="border-color:var(--yel)">🧰 Tu pedido ya se está preparando, por eso no se puede modificar. Si necesitás un cambio, escribinos por WhatsApp.</div>':''}${v.nota?`<div class="muted">Nota: ${esc(v.nota)}</div>`:''}${v.editado?`<div class="muted" style="margin-top:4px">✎ Editado el ${fmtF(v.editado)} por ${v.editadoPor==='admin'?'el comercio':'el cliente'}</div>`:''}<div class="row" style="margin-top:10px">${editable(v)?`<button class="btn" onclick="abrirEditor('${esc(v.id)}')">✎ Editar pedido</button>`:''}${(ROLE==='admin'||(v.tipo==='pedido'&&(v.estado==='nuevo'||v.estado==='cancelado')))?`<button class="btn bad" onclick="delPedido('${esc(v.id)}')">🗑 Eliminar</button>`:''}<button class="btn sec" style="flex:1" onclick="closeModal()">Cerrar</button></div>${ROLE==='admin'&&v.tipo==='pedido'&&v.estado==='nuevo'?`<div style="margin-top:8px"><button class="btn" style="width:100%" onclick="closeModal();pasarPreparacion('${esc(v.id)}')">🧰 Pasar a preparación (baja el PDF)</button></div>`:''}${ROLE==='admin'&&v.tipo==='pedido'&&v.estado==='preparacion'?`<div style="margin-top:8px"><button class="btn sec" style="width:100%" onclick="pdfCompra('${esc(v.id)}')">⬇️ Descargar PDF del pedido</button></div>`:''}${ROLE==='admin'&&v.tipo==='pedido'?`<div style="margin-top:8px"><button class="btn ${v.pasadoEG?'sec':''}" style="width:100%" onclick="togglePasadoEG('${esc(v.id)}')">${v.pasadoEG?'✅ Pasado a EG Import Tool · tocá para deshacer':'📤 Pedido pasado a EG Import Tool'}</button></div>`:''}<div style="margin-top:8px"><button class="btn sec sm" style="width:100%" onclick="csvCompra('${esc(v.id)}')">⬇️ Descargar CSV con códigos</button></div>`);
 }
 /* ---------- editar un pedido (cliente y administrador) ---------- */
 function abrirEditor(id){
@@ -1163,7 +1200,7 @@ function pedidoRow(v){
   const nuevo=v.estado==='nuevo';
   return `<div style="border-top:1px solid var(--line);padding:8px 0"><div class="row"><span style="flex:1"><b>${new Date(v.fecha).toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'})}</b> <span class="tag ${v.estado==='entregado'?'ok':''}">${esc(estTxt(v))}</span>${sinVer(v)?' <span class="tag new">sin ver</span>':''}${v.pasadoEG?' <span class="tag ok">EG Import Tool</span>':''}</span><b style="color:var(--yel)">${money(v.total)}</b></div>
   <div class="muted" style="margin:2px 0 6px">${v.items.map(i=>i.q+'× '+esc(i.n)+' <b>['+esc(i.c)+']</b>').slice(0,3).join(' · ')}${v.items.length>3?' · +'+(v.items.length-3)+' más':''}${v.nota?' — “'+esc(v.nota)+'”':''}</div>
-  <div class="row" style="flex-wrap:wrap"><button class="btn sec sm" onclick="verCompra('${esc(v.id)}')">Ver</button>${waCliente(v)?`<a class="btn sec sm" style="text-decoration:none" target="_blank" rel="noopener" href="${waCliente(v)}">💬 WhatsApp</a>`:''}${nuevo?`<button class="btn sm" onclick="abrirEditor('${esc(v.id)}')">✎ Editar</button><button class="btn sm" onclick="pasarPreparacion('${esc(v.id)}')">🧰 En preparación</button><button class="btn sec sm" onclick="setEstado('${esc(v.id)}','entregado')">Entregado</button><button class="btn bad sm" onclick="setEstado('${esc(v.id)}','cancelado')">Cancelar</button>`:''}${v.estado==='preparacion'?`<button class="btn sec sm" onclick="pdfCompra('${esc(v.id)}')">⬇️ PDF</button><button class="btn sec sm" onclick="setEstado('${esc(v.id)}','entregado')">Entregado</button><button class="btn sec sm" onclick="volverANuevo('${esc(v.id)}')">↩ Volver a nuevo</button><button class="btn bad sm" onclick="setEstado('${esc(v.id)}','cancelado')">Cancelar</button>`:''}<button class="btn bad sm" onclick="delPedido('${esc(v.id)}')">🗑 Eliminar</button></div></div>`;
+  <div class="row" style="flex-wrap:wrap"><button class="btn sec sm" onclick="verCompra('${esc(v.id)}')">Ver</button>${waCliente(v)?`<a class="btn sec sm" style="text-decoration:none" target="_blank" rel="noopener" href="${waCliente(v)}">💬 WhatsApp</a>`:''}${nuevo?`<button class="btn sm" onclick="abrirEditor('${esc(v.id)}')">✎ Editar</button><button class="btn sm" onclick="pasarPreparacion('${esc(v.id)}')">🧰 En preparación</button><button class="btn sec sm" onclick="entregarPedido('${esc(v.id)}')">Entregado</button><button class="btn bad sm" onclick="setEstado('${esc(v.id)}','cancelado')">Cancelar</button>`:''}${v.estado==='entregado'?`<button class="btn sec sm" onclick="pdfCompra('${esc(v.id)}')">⬇️ PDF</button><button class="btn sec sm" onclick="deshacerEntrega('${esc(v.id)}')">↩ Deshacer entrega</button>`:''}${v.estado==='preparacion'?`<button class="btn sec sm" onclick="pdfCompra('${esc(v.id)}')">⬇️ PDF</button><button class="btn sec sm" onclick="entregarPedido('${esc(v.id)}')">Entregado</button><button class="btn sec sm" onclick="volverANuevo('${esc(v.id)}')">↩ Volver a nuevo</button><button class="btn bad sm" onclick="setEstado('${esc(v.id)}','cancelado')">Cancelar</button>`:''}<button class="btn bad sm" onclick="delPedido('${esc(v.id)}')">🗑 Eliminar</button></div></div>`;
 }
 function pintarCli(){
   const t=termsOf(qCli),G=gruposClientes().filter(g=>{const h=norm(g.c.nombre+' '+g.c.usuario+' '+g.c.tel);return t.every(x=>h.includes(x))});
@@ -1198,7 +1235,7 @@ function delGone(id){const vs=VENTAS_C.filter(v=>v.uid===id);ask('¿Eliminar los
 function delPedido(id){
   const v=VENTAS_C.find(x=>x.id===id);if(!v)return;
   if(ROLE!=='admin'&&!(v.tipo==='pedido'&&(v.estado==='nuevo'||v.estado==='cancelado'))){toast('Este pedido ya no se puede eliminar');return}
-  ask('¿Eliminar este pedido del '+new Date(v.fecha).toLocaleDateString('es-AR')+' ('+money(v.total)+')?\nNo se puede deshacer.','Eliminar',async()=>{
+  ask('¿Eliminar este pedido del '+new Date(v.fecha).toLocaleDateString('es-AR')+' ('+money(v.total)+')?'+(v.estado==='entregado'?'\nComo ya está entregado, también se saca de Ventas y del balance.':'')+'\nNo se puede deshacer.','Eliminar',async()=>{
     try{await X.batchDel(['ventas/'+id]);closeModal();toast('Pedido eliminado')}catch(e){toast('No pude eliminar el pedido')}},true);
 }
 function waCliente(v){
@@ -1220,6 +1257,30 @@ function pasarPreparacion(id){
 async function volverANuevo(id){
   const v=VENTAS_C.find(x=>x.id===id);if(!v||ROLE!=='admin')return;
   try{await X.update('ventas/'+id,{estado:'nuevo'});v.estado='nuevo';toast('Vuelve a "nuevo": el cliente puede modificarlo');avisoPedidos();nav();if(tab==='clientes')vClientes()}catch(e){toast('No pude guardar')}
+}
+function entregarPedido(id){
+  const v=VENTAS_C.find(x=>x.id===id);if(!v||ROLE!=='admin')return;
+  const costo_=costoPedido(v);
+  modal(`<h2>✅ Marcar como entregado</h2><p class="muted" style="margin:0 0 8px">Se carga como venta y suma al balance del día y del mes.</p>
+  <div class="card"><div class="row"><span style="flex:1">${esc(v.nombre||'')} · ${v.items.length} producto${v.items.length===1?'':'s'}</span><b style="color:var(--yel)">${money(v.total)}</b></div>
+  <div class="row muted" style="margin-top:4px"><span style="flex:1">Costo</span><span>${money(costo_)}</span></div><div class="row" style="margin-top:2px"><span style="flex:1">Ganancia estimada</span><b style="color:var(--ok)">${money(v.total-costo_)}</b></div></div>
+  <label>Forma de pago</label><select id="entPago">${['Efectivo','Transferencia','Débito','Crédito','Otro'].map(x=>`<option>${x}</option>`).join('')}</select>
+  <div class="row" style="margin-top:12px"><button class="btn sec" onclick="closeModal()">Volver</button><button class="btn" style="flex:1" onclick="confirmarEntrega('${esc(id)}')">Confirmar entrega</button></div>`);
+}
+async function confirmarEntrega(id){
+  const v=VENTAS_C.find(x=>x.id===id);if(!v)return;
+  const pago=($('#entPago')||{}).value||'Efectivo',t=new Date().toISOString(),costos=v.items.map(i=>{const p=find(i.c);return p?costo(p):i.p});
+  try{
+    await X.update('ventas/'+id,{estado:'entregado',entregadoEn:t,pago,costos});
+    v.estado='entregado';v.entregadoEn=t;v.pago=pago;v.costos=costos;
+    closeModal();toast('Entregado: cargado en Ventas y en el balance');avisoPedidos();nav();render();
+  }catch(e){toast('No pude marcarlo como entregado')}
+}
+function deshacerEntrega(id){
+  const v=VENTAS_C.find(x=>x.id===id);if(!v||ROLE!=='admin')return;
+  ask('¿Deshacer la entrega?\n\nEl pedido vuelve a "En preparación" y se saca de Ventas y del balance.','Sí, deshacer',async()=>{
+    try{await X.update('ventas/'+id,{estado:'preparacion',entregadoEn:null});v.estado='preparacion';v.entregadoEn=null;toast('Entrega deshecha');avisoPedidos();nav();render()}catch(e){toast('No pude deshacerla')}
+  });
 }
 async function setEstado(id,e){try{await X.update('ventas/'+id,{estado:e});toast(e==='entregado'?'Marcado como entregado':'Pedido cancelado')}catch(er){toast('No pude guardar')}}
 function verComprasCli(id){
