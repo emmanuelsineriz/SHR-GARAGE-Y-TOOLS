@@ -169,7 +169,7 @@ nav button.on b{animation:pop .35s ease}
 <div id="printHost" style="display:none"></div>
 
 <script>
-const APP_VERSION='2.11.0';
+const APP_VERSION='2.12.0';
 const WA_NUM='5491165366884',WA_TXT='Hola SHR Garage & Tools, quería consultar por un producto.';
 /* Configuración fija del negocio (igual en todos los equipos). Se completa al publicar la app. */
 const FIXED=null;
@@ -448,9 +448,9 @@ function waAnalizar(){
 }
 function waRow(i){
   const l=WA.lines[i],p=l.sel?find(l.sel):null,st=p?'ok':(l.cands.length?'warn':'bad'),ed=!p||l.edit;
-  const opts=l.cands.map(c=>`<option value="${esc(c.c)}" ${c.c===l.sel?'selected':''}>${esc(nombre(c)).slice(0,58)} · ${money(precio(c))}</option>`).join('');
+  const opts=l.cands.map(c=>`<option value="${esc(c.c)}" ${c.c===l.sel?'selected':''}>[${esc(c.c)}] ${esc(nombre(c)).slice(0,54)} · ${money(precio(c))}</option>`).join('');
   return `<div class="card warow ${st}" id="wr${i}"><div class="row"><input type="checkbox" style="width:auto" ${l.inc&&p?'checked':''} ${p?'':'disabled'} onchange="waInc(${i},this.checked)"><input class="waq" type="number" min="1" inputmode="numeric" value="${l.q}" onchange="waQ(${i},this.value)"><div class="muted" style="flex:1;min-width:0;overflow-wrap:anywhere">${esc(l.txt)}</div></div>
-  ${p?`<div class="nm" style="margin-top:6px">✅ ${esc(nombre(p))} · <b style="color:var(--yel)">${money(precio(p))}</b>${l.aprendido?' <span class="tag">aprendido</span>':''} ${l.edit?'':`<button class="btn sec sm" onclick="waEdit(${i})">Cambiar</button>`}</div>`:`<div style="margin-top:6px;color:${l.cands.length?'var(--yel)':'var(--bad)'}">${l.cands.length?'⚠️ Elegí cuál es'+(l.quitadas.length?' <span class="muted">(no entendí: '+esc(l.quitadas.join(' '))+')</span>':''):'❌ No lo encontré, buscalo'}</div>`}
+  ${p?`<div class="nm" style="margin-top:6px">✅ <b>[${esc(p.c)}]</b> ${esc(nombre(p))} · <b style="color:var(--yel)">${money(precio(p))}</b>${l.aprendido?' <span class="tag">aprendido</span>':''} ${l.edit?'':`<button class="btn sec sm" onclick="waEdit(${i})">Cambiar</button>`}</div>`:`<div style="margin-top:6px;color:${l.cands.length?'var(--yel)':'var(--bad)'}">${l.cands.length?'⚠️ Elegí cuál es'+(l.quitadas.length?' <span class="muted">(no entendí: '+esc(l.quitadas.join(' '))+')</span>':''):'❌ No lo encontré, buscalo'}</div>`}
   ${ed?`<select style="margin-top:6px" onchange="waPick(${i},this.value)"><option value="">${l.cands.length?'— elegí el producto —':'— sin resultados —'}</option>${opts}</select><input style="margin-top:6px" placeholder="Buscar otro producto…" oninput="waBuscar(${i},this.value)">`:''}</div>`;
 }
 function waFoot(){
@@ -469,7 +469,7 @@ function waInc(i,v){WA.lines[i].inc=!!v;waFoot()}
 function waQ(i,v){WA.lines[i].q=Math.max(1,parseInt(v,10)||1)}
 function waEdit(i){WA.lines[i].edit=true;waRefresh(i)}
 function waPick(i,code){const l=WA.lines[i];l.sel=code||null;l.inc=!!code;l.edit=false;l.aprendido=false;if(code&&l.key){S.pick=S.pick||{};S.pick[l.key]=code;save()}waRefresh(i)}
-function waBuscar(i,v){const l=WA.lines[i];l.cands=v.trim().length>=2?searchProds(v,'',8):l.orig;const sel=$('#wr'+i+' select');if(sel)sel.innerHTML=`<option value="">— elegí el producto —</option>`+l.cands.map(c=>`<option value="${esc(c.c)}">${esc(nombre(c)).slice(0,58)} · ${money(precio(c))}</option>`).join('');waFoot()}
+function waBuscar(i,v){const l=WA.lines[i];l.cands=v.trim().length>=2?searchProds(v,'',8):l.orig;const sel=$('#wr'+i+' select');if(sel)sel.innerHTML=`<option value="">— elegí el producto —</option>`+l.cands.map(c=>`<option value="${esc(c.c)}">[${esc(c.c)}] ${esc(nombre(c)).slice(0,54)} · ${money(precio(c))}</option>`).join('');waFoot()}
 function waAgregar(){
   let n=0;
   WA.lines.forEach(l=>{if(!l.inc||!l.sel)return;const p=find(l.sel);if(!p)return;const x=S.cart.find(y=>y.c===p.c);if(x)x.q+=l.q;else S.cart.push({c:p.c,n:nombre(p),q:l.q,p:precio(p),costo:costo(p)});n++});
@@ -514,7 +514,7 @@ function vVentas(){
   const gan=dia.reduce((a,v)=>a+v.items.reduce((s,i)=>s+(i.p*(1-(v.desc||0)/100)-i.costo)*i.q,0),0);
   const por={};dia.forEach(v=>por[v.pago]=(por[v.pago]||0)+v.total);
   $('#main').innerHTML=`<div class="grid2"><div class="kpi"><small>Hoy</small><div>${money(tot)}</div></div><div class="kpi" ${isAdmin()?'':'onclick="requireAdmin(render)"'}><small>Ganancia estimada</small><div>${isAdmin()?money(gan):'🔒'}</div></div><div class="kpi"><small>Ventas hoy</small><div>${dia.length}</div></div><div class="kpi"><small>${Object.keys(por).map(k=>k).join(' / ')||'Medios de pago'}</small><div style="font-size:14px">${Object.entries(por).map(([k,v])=>k+' '+money(v)).join('<br>')||'—'}</div></div></div>
-  <h3 style="margin:16px 2px 4px">Historial</h3>`+(vs.length?vs.slice(0,200).map(v=>`<div class="card" onclick="verVenta(${v.id})" style="${v.anulada?'opacity:.5':''}"><div class="row"><b>#${String(v.n).padStart(5,'0')}</b><span class="muted" style="flex:1">${new Date(v.fecha).toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'})} · ${esc(v.pago)}${v.cliente?' · '+esc(v.cliente):''}${v.anulada?' · ANULADA':''}</span><b style="color:var(--yel)">${money(v.total)}</b></div></div>`).join(''):'<div class="empty">Todavía no hay ventas.</div>');
+  <h3 style="margin:16px 2px 4px">Historial</h3>`+(vs.length?vs.slice(0,200).map(v=>`<div class="card" onclick="verVenta(${v.id})" style="${v.anulada?'opacity:.5':''}"><div class="row"><b>#${String(v.n).padStart(5,'0')}</b><span class="muted" style="flex:1">${new Date(v.fecha).toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'})} · ${esc(v.pago)}${v.cliente?' · '+esc(v.cliente):''}${v.anulada?' · ANULADA':''}</span><b style="color:var(--yel)">${money(v.total)}</b></div><div class="muted" style="font-size:12px;margin-top:3px">${v.items.slice(0,6).map(i=>i.q+'× '+esc(i.c)).join(' · ')}${v.items.length>6?' · +'+(v.items.length-6)+' más':''}</div></div>`).join(''):'<div class="empty">Todavía no hay ventas.</div>');
 }
 function vConfig(){
   const c=S.cfg;
@@ -554,13 +554,13 @@ function openCart(){
   if(ROLE==='cliente')return openCartCli();
   if(!S.cart.length){closeModal();return}
   const d=window.__desc||0;const t=cartTotals(d);
-  modal(`<h2>Carrito</h2>${S.cart.map((l,i)=>`<div class="card"><div class="nm">${esc(l.n)}</div><div class="row" style="margin-top:6px"><div class="q"><button onclick="qty(${i},-1)">−</button><input type="number" inputmode="decimal" value="${l.q}" onchange="qtySet(${i},this.value)"><button onclick="qty(${i},1)">+</button></div><span style="flex:1"></span><input type="number" inputmode="decimal" value="${l.p}" style="width:100px" onchange="priceSet(${i},this.value)"><b style="width:86px;text-align:right">${money(l.q*l.p)}</b><button class="btn bad sm" onclick="rm(${i})">✕</button></div></div>`).join('')}
+  modal(`<h2>Carrito</h2>${S.cart.map((l,i)=>`<div class="card"><div class="nm">${esc(l.n)}</div><div class="muted" style="font-size:12px">Cód. ${esc(l.c)}</div><div class="row" style="margin-top:6px"><div class="q"><button onclick="qty(${i},-1)">−</button><input type="number" inputmode="decimal" value="${l.q}" onchange="qtySet(${i},this.value)"><button onclick="qty(${i},1)">+</button></div><span style="flex:1"></span><input type="number" inputmode="decimal" value="${l.p}" style="width:100px" onchange="priceSet(${i},this.value)"><b style="width:86px;text-align:right">${money(l.q*l.p)}</b><button class="btn bad sm" onclick="rm(${i})">✕</button></div></div>`).join('')}
   <div class="grid2"><div><label>Descuento %</label><input id="desc" type="number" inputmode="decimal" value="${d||''}" placeholder="0" onchange="window.__desc=num(this.value);openCart()"></div><div><label>Pago</label><select id="pago">${['Efectivo','Transferencia','Débito','Crédito','Otro'].map(x=>`<option ${x===(window.__pago||'Efectivo')?'selected':''}>${x}</option>`).join('')}</select></div></div>
   <label>Cliente (opcional)</label><input id="cli" list="cliList" value="${esc(window.__cli||'')}" placeholder="Nombre o elegí un cliente registrado"><datalist id="cliList">${CLIENTES.map(c=>`<option value="${esc(c.nombre)} (@${esc(c.usuario)})">`).join('')}</datalist>
   ${(()=>{const c=clienteDe(window.__cli);if(!c)return'';const m=margenCli(c);return m==null?'':`<button class="btn sec sm" style="margin-top:6px" onclick="aplicarPrecioCliente()">Aplicar precio de ${esc(c.usuario)} (${m}%)</button>`})()}
   <div class="tot"><span>Total</span><span>${money(t.total)}</span></div>
   ${t.descMonto?`<div class="muted" style="margin-top:-8px">Descuento: −${money(t.descMonto)}</div>`:''}
-  <div class="row" style="margin-top:12px"><button class="btn sec" onclick="clearCart()">Vaciar</button><button class="btn" style="flex:1" onclick="cobrar()">Cobrar ${money(t.total)}</button></div>`);
+  <div class="row" style="margin-top:12px"><button class="btn sec" onclick="clearCart()">Vaciar</button><button class="btn sec" onclick="csvCarrito()" title="Descargar CSV con códigos">⬇️ CSV</button><button class="btn" style="flex:1" onclick="cobrar()">Cobrar ${money(t.total)}</button></div>`);
   $('#pago').onchange=e=>window.__pago=e.target.value;$('#cli').oninput=e=>window.__cli=e.target.value;$('#cli').onchange=()=>openCart();
 }
 function qty(i,d){S.cart[i].q=Math.max(0,S.cart[i].q+d);if(!S.cart[i].q)S.cart.splice(i,1);save();renderCartBar();openCart()}
@@ -583,7 +583,7 @@ function cobrar(){
 function ticketTxt(v){
   const L=[];L.push(S.cfg.nombre.toUpperCase());if(S.cfg.tel)L.push('Tel: '+S.cfg.tel);
   L.push(new Date(v.fecha).toLocaleString('es-AR')+'  Ticket #'+String(v.n).padStart(5,'0'));if(v.cliente)L.push('Cliente: '+v.cliente);L.push('--------------------------------');
-  v.items.forEach(i=>{L.push(i.n);L.push('  '+i.q+' x '+money(i.p)+'  = '+money(i.q*i.p))});
+  v.items.forEach(i=>{L.push((i.c?'['+i.c+'] ':'')+i.n);L.push('  '+i.q+' x '+money(i.p)+'  = '+money(i.q*i.p))});
   L.push('--------------------------------');
   if(v.desc)L.push('Descuento '+v.desc+'%');
   L.push('TOTAL: '+money(v.total)+'  ('+v.pago+')');if(v.anulada)L.push('*** VENTA ANULADA ***');if(S.cfg.pie)L.push('',S.cfg.pie);
@@ -594,6 +594,7 @@ function verVenta(id,nueva){
   const tel=(S.cfg.tel||'').replace(/\D/g,'');
   modal(`<h2>${nueva?'✅ Venta registrada':'Venta #'+String(v.n).padStart(5,'0')}</h2><div id="printArea"><pre class="ticket">${esc(t)}</pre></div>
   <div class="row" style="margin-top:12px;flex-wrap:wrap"><button class="btn" onclick="window.print()">Imprimir</button><a class="btn" style="text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(t)}">WhatsApp</a><button class="btn sec" onclick="navigator.clipboard&&navigator.clipboard.writeText(${esc(JSON.stringify(t)).replace(/&quot;/g,'&quot;')}).then(()=>toast('Copiado'))">Copiar</button></div>
+  <div class="row" style="margin-top:8px"><button class="btn sec sm" onclick="csvVenta(${v.id})">⬇️ Descargar CSV con códigos</button></div>
   <div class="row" style="margin-top:8px">${v.anulada?'':`<button class="btn bad sm" onclick="anular(${v.id})">Anular venta</button>`}<span style="flex:1"></span><button class="btn sec" onclick="closeModal()">Cerrar</button></div>`);
 }
 function anular(id){
@@ -723,6 +724,17 @@ function seguridadCard(){
 }
 
 /* ---------- datos ---------- */
+function csvDe(items,extra){
+  const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';const d=v=>String(v==null?'':v).replace('.',',');
+  const L=['Código;Producto;Cantidad;Precio unitario;Subtotal'];
+  let tot=0;(items||[]).forEach(i=>{const sub=(i.q||0)*(i.p||0);tot+=sub;L.push([q(i.c),q(i.n),d(i.q),d(i.p),d(sub)].join(';'))});
+  L.push(['','"TOTAL"','','',d(tot)].join(';'));
+  return '\ufeff'+(extra?extra+'\r\n':'')+L.join('\r\n');
+}
+function bajarCsv(nombre,items,extra){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csvDe(items,extra)],{type:'text/csv;charset=utf-8'}));a.download=nombre;document.body.appendChild(a);a.click();a.remove()}
+function csvVenta(id){const v=S.ventas.find(x=>x.id===id);if(v)bajarCsv('venta_'+String(v.n).padStart(5,'0')+'.csv',v.items,'"Venta #'+v.n+' · '+new Date(v.fecha).toLocaleString('es-AR')+'"')}
+function csvCompra(id){const v=VENTAS_C.find(x=>x.id===id);if(v)bajarCsv('pedido_'+new Date(v.fecha).toISOString().slice(0,10)+(v.usuario?'_'+v.usuario:'')+'.csv',v.items,'"'+(v.nombre||'')+' · '+new Date(v.fecha).toLocaleDateString('es-AR')+'"')}
+function csvCarrito(){if(S.cart.length)bajarCsv('carrito_'+new Date().toISOString().slice(0,10)+'.csv',S.cart)}
 function download(name,text){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'application/json'}));a.download=name;document.body.appendChild(a);a.click();a.remove()}
 function backup(){if(!isAdmin()){toast('Bloqueado');return}download('ferreteria_backup_'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify({app:'ferreteria',version:APP_VERSION,datos:S}))}
 function readFile(inp,cb){const f=inp.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{cb(JSON.parse(r.result))}catch(e){toast('Archivo inválido')}inp.value=''};r.readAsText(f)}
@@ -906,7 +918,7 @@ async function doCambiarPw(){
 function openCartCli(){
   if(!S.cart.length){closeModal();return}
   const t=cartTotals(0);
-  modal(`<h2>Tu pedido</h2>${S.cart.map((l,i)=>`<div class="card"><div class="nm">${esc(l.n)}</div><div class="row" style="margin-top:6px"><div class="q"><button onclick="qty(${i},-1)">−</button><input type="number" inputmode="decimal" value="${l.q}" onchange="qtySet(${i},this.value)"><button onclick="qty(${i},1)">+</button></div><span style="flex:1"></span><span class="muted">${money(l.p)} c/u</span><b style="width:86px;text-align:right">${money(l.q*l.p)}</b><button class="btn bad sm" onclick="rm(${i})">✕</button></div></div>`).join('')}
+  modal(`<h2>Tu pedido</h2>${S.cart.map((l,i)=>`<div class="card"><div class="nm">${esc(l.n)}</div><div class="muted" style="font-size:12px">Cód. ${esc(l.c)}</div><div class="row" style="margin-top:6px"><div class="q"><button onclick="qty(${i},-1)">−</button><input type="number" inputmode="decimal" value="${l.q}" onchange="qtySet(${i},this.value)"><button onclick="qty(${i},1)">+</button></div><span style="flex:1"></span><span class="muted">${money(l.p)} c/u</span><b style="width:86px;text-align:right">${money(l.q*l.p)}</b><button class="btn bad sm" onclick="rm(${i})">✕</button></div></div>`).join('')}
   <label>Aclaración (opcional)</label><input id="pnote" placeholder="Ej: retiro mañana por la tarde">
   <div class="tot"><span>Total</span><span>${money(t.total)}</span></div>
   <p class="muted" style="margin-top:-6px">Se guarda en tu cuenta y se lo mandás a Ema por WhatsApp. Ella confirma el precio final y la entrega.</p>
@@ -916,7 +928,7 @@ async function enviarPedido(){
   if(!S.cart.length||ROLE!=='cliente')return;
   const note=(($('#pnote')||{}).value||'').trim();
   const items=S.cart.map(l=>({c:l.c,n:l.n,q:l.q,p:l.p})),total=cartTotals(0).total;
-  const txt=`Hola SHR Garage & Tools, soy ${CLIENT.nombre} (usuario ${CLIENT.usuario}). Quiero hacer este pedido:\n`+items.map(i=>`• ${i.q} x ${i.n} — ${money(i.p*i.q)}`).join('\n')+`\nTotal: ${money(total)}`+(note?`\nNota: ${note}`:'');
+  const txt=`Hola SHR Garage & Tools, soy ${CLIENT.nombre} (usuario ${CLIENT.usuario}). Quiero hacer este pedido:\n`+items.map(i=>`• ${i.q} x ${i.n} (cód. ${i.c}) — ${money(i.p*i.q)}`).join('\n')+`\nTotal: ${money(total)}`+(note?`\nNota: ${note}`:'');
   let ok=true;
   try{await X.add('ventas',{uid:CLIENT.uid,usuario:CLIENT.usuario,nombre:CLIENT.nombre,tel:CLIENT.tel,tipo:'pedido',estado:'nuevo',fecha:new Date().toISOString(),items,total,nota:note})}catch(e){ok=false}
   S.cart=[];save();renderCartBar();
@@ -930,7 +942,7 @@ function vMis(){
 }
 function verCompra(id){
   const v=VENTAS_C.find(x=>x.id===id);if(!v)return;
-  modal(`<h2>${v.tipo==='pedido'?'Pedido':'Compra'} del ${new Date(v.fecha).toLocaleDateString('es-AR')}</h2>${v.nombre&&ROLE==='admin'?`<div class="muted">${esc(v.nombre)} · @${esc(v.usuario)}</div>`:''}<div class="muted" style="margin:4px 0 8px">${esc(estTxt(v))}${v.pago?' · '+esc(v.pago):''}</div>${v.items.map(i=>`<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><span style="flex:1">${i.q} × ${esc(i.n)}</span><b>${money(i.p*i.q)}</b></div>`).join('')}${v.desc?`<div class="muted" style="margin-top:6px">Descuento ${v.desc}%</div>`:''}<div class="tot"><span>Total</span><span>${money(v.total)}</span></div>${v.nota?`<div class="muted">Nota: ${esc(v.nota)}</div>`:''}${v.editado?`<div class="muted" style="margin-top:4px">✎ Editado el ${fmtF(v.editado)} por ${v.editadoPor==='admin'?'el comercio':'el cliente'}</div>`:''}<div class="row" style="margin-top:10px">${editable(v)?`<button class="btn" onclick="abrirEditor('${esc(v.id)}')">✎ Editar pedido</button>`:''}${(ROLE==='admin'||(v.tipo==='pedido'&&(v.estado==='nuevo'||v.estado==='cancelado')))?`<button class="btn bad" onclick="delPedido('${esc(v.id)}')">🗑 Eliminar</button>`:''}<button class="btn sec" style="flex:1" onclick="closeModal()">Cerrar</button></div>`);
+  modal(`<h2>${v.tipo==='pedido'?'Pedido':'Compra'} del ${new Date(v.fecha).toLocaleDateString('es-AR')}</h2>${v.nombre&&ROLE==='admin'?`<div class="muted">${esc(v.nombre)} · @${esc(v.usuario)}</div>`:''}<div class="muted" style="margin:4px 0 8px">${esc(estTxt(v))}${v.pago?' · '+esc(v.pago):''}</div>${v.items.map(i=>`<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><span style="flex:1">${i.q} × ${esc(i.n)}<br><small class="muted">Cód. ${esc(i.c)}</small></span><b>${money(i.p*i.q)}</b></div>`).join('')}${v.desc?`<div class="muted" style="margin-top:6px">Descuento ${v.desc}%</div>`:''}<div class="tot"><span>Total</span><span>${money(v.total)}</span></div>${v.nota?`<div class="muted">Nota: ${esc(v.nota)}</div>`:''}${v.editado?`<div class="muted" style="margin-top:4px">✎ Editado el ${fmtF(v.editado)} por ${v.editadoPor==='admin'?'el comercio':'el cliente'}</div>`:''}<div class="row" style="margin-top:10px">${editable(v)?`<button class="btn" onclick="abrirEditor('${esc(v.id)}')">✎ Editar pedido</button>`:''}${(ROLE==='admin'||(v.tipo==='pedido'&&(v.estado==='nuevo'||v.estado==='cancelado')))?`<button class="btn bad" onclick="delPedido('${esc(v.id)}')">🗑 Eliminar</button>`:''}<button class="btn sec" style="flex:1" onclick="closeModal()">Cerrar</button></div><div style="margin-top:8px"><button class="btn sec sm" style="width:100%" onclick="csvCompra('${esc(v.id)}')">⬇️ Descargar CSV con códigos</button></div>`);
 }
 /* ---------- editar un pedido (cliente y administrador) ---------- */
 function abrirEditor(id){
@@ -947,7 +959,7 @@ function abrirEditor(id){
   $('#edQ').oninput=e=>pintarEdRes(e.target.value);pintarED();
 }
 function pintarED(){
-  $('#edLines').innerHTML=ED.items.length?ED.items.map((l,i)=>`<div class="card"><div class="nm">${esc(l.n)}</div><div class="row" style="margin-top:6px"><div class="q"><button onclick="edQty(${i},-1)">−</button><input type="number" inputmode="decimal" value="${l.q}" onchange="edQtySet(${i},this.value)"><button onclick="edQty(${i},1)">+</button></div><span style="flex:1"></span>${ROLE==='admin'?`<input type="number" inputmode="decimal" value="${l.p}" style="width:100px" onchange="edPrice(${i},this.value)">`:`<span class="muted">${money(l.p)} c/u</span>`}<b style="width:86px;text-align:right">${money(l.q*l.p)}</b><button class="btn bad sm" onclick="edRm(${i})">✕</button></div></div>`).join(''):'<div class="empty" style="padding:14px">No quedó ningún producto.</div>';
+  $('#edLines').innerHTML=ED.items.length?ED.items.map((l,i)=>`<div class="card"><div class="nm">${esc(l.n)}</div><div class="muted" style="font-size:12px">Cód. ${esc(l.c)}</div><div class="row" style="margin-top:6px"><div class="q"><button onclick="edQty(${i},-1)">−</button><input type="number" inputmode="decimal" value="${l.q}" onchange="edQtySet(${i},this.value)"><button onclick="edQty(${i},1)">+</button></div><span style="flex:1"></span>${ROLE==='admin'?`<input type="number" inputmode="decimal" value="${l.p}" style="width:100px" onchange="edPrice(${i},this.value)">`:`<span class="muted">${money(l.p)} c/u</span>`}<b style="width:86px;text-align:right">${money(l.q*l.p)}</b><button class="btn bad sm" onclick="edRm(${i})">✕</button></div></div>`).join(''):'<div class="empty" style="padding:14px">No quedó ningún producto.</div>';
   $('#edTot').textContent=money(ED.items.reduce((a,l)=>a+l.q*l.p,0));
 }
 const edQty=(i,d)=>{ED.items[i].q=Math.max(0,+(ED.items[i].q+d).toFixed(3));if(!ED.items[i].q)ED.items.splice(i,1);pintarED()};
@@ -998,7 +1010,7 @@ function vClientes(){
 function pedidoRow(v){
   const nuevo=v.estado==='nuevo';
   return `<div style="border-top:1px solid var(--line);padding:8px 0"><div class="row"><span style="flex:1"><b>${new Date(v.fecha).toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'})}</b> <span class="tag ${v.estado==='entregado'?'ok':''}">${esc(estTxt(v))}</span></span><b style="color:var(--yel)">${money(v.total)}</b></div>
-  <div class="muted" style="margin:2px 0 6px">${v.items.map(i=>i.q+'× '+esc(i.n)).slice(0,3).join(' · ')}${v.items.length>3?' · +'+(v.items.length-3)+' más':''}${v.nota?' — “'+esc(v.nota)+'”':''}</div>
+  <div class="muted" style="margin:2px 0 6px">${v.items.map(i=>i.q+'× '+esc(i.n)+' <b>['+esc(i.c)+']</b>').slice(0,3).join(' · ')}${v.items.length>3?' · +'+(v.items.length-3)+' más':''}${v.nota?' — “'+esc(v.nota)+'”':''}</div>
   <div class="row" style="flex-wrap:wrap"><button class="btn sec sm" onclick="verCompra('${esc(v.id)}')">Ver</button>${nuevo?`<button class="btn sm" onclick="abrirEditor('${esc(v.id)}')">✎ Editar</button><button class="btn sec sm" onclick="setEstado('${esc(v.id)}','entregado')">Entregado</button><button class="btn bad sm" onclick="setEstado('${esc(v.id)}','cancelado')">Cancelar</button>`:''}<button class="btn bad sm" onclick="delPedido('${esc(v.id)}')">🗑 Eliminar</button></div></div>`;
 }
 function pintarCli(){
