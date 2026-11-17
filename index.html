@@ -169,7 +169,7 @@ nav button.on b{animation:pop .35s ease}
 <div id="printHost" style="display:none"></div>
 
 <script>
-const APP_VERSION='2.13.2';
+const APP_VERSION='2.14.0';
 const WA_NUM='5491165366884',WA_TXT='Hola SHR Garage & Tools, quería consultar por un producto.';
 /* Configuración fija del negocio (igual en todos los equipos). Se completa al publicar la app. */
 const FIXED=null;
@@ -552,7 +552,7 @@ function vVentas(){
 }
 function vConfig(){
   const c=S.cfg;
-  $('#main').innerHTML=`${seguridadCard()}<div class="card"><h3 style="margin:0 0 6px">Negocio</h3>
+  $('#main').innerHTML=`${seguridadCard()}${avisosCard()}<div class="card"><h3 style="margin:0 0 6px">Negocio</h3>
   <label>Nombre</label><input id="cNombre" value="${esc(c.nombre)}"><label>WhatsApp / teléfono (para el ticket)</label><input id="cTel" value="${esc(c.tel)}" inputmode="tel"><label>Pie del ticket</label><input id="cPie" value="${esc(c.pie)}"></div>
   <div class="card"><h3 style="margin:0 0 6px">Precios de venta</h3>
   <p class="muted" style="margin:0">Los precios de lista se actualizan solos desde El Gasolero. El precio de venta = lista + margen.</p>
@@ -753,6 +753,20 @@ function removePw(){
   if(!confirm('¿Quitar la contraseña? Cualquiera va a poder cambiar el margen.'))return;
   S.cfg.pw=null;save();render();toast('Contraseña quitada');
 }
+/* ---------- avisos de pedidos al teléfono (ntfy.sh): llegan aunque la app esté cerrada ---------- */
+const NTFY_URL='https://ntfy.sh/',NTFY_TOPIC='shr-pedidos-2sydicvxvrdbdylp';
+function ntfy(titulo,texto){
+  try{
+    return fetch(NTFY_URL+NTFY_TOPIC+'?title='+encodeURIComponent(titulo)+'&priority=high&tags=shopping_cart&click='+encodeURIComponent(location.origin+location.pathname),{method:'POST',body:texto,keepalive:true}).then(r=>r.ok).catch(()=>false);
+  }catch(e){return Promise.resolve(false)}
+}
+function avisarPedido(items,total){const n=items.reduce((a,i)=>a+(i.q||0),0);ntfy('🛒 Nuevo pedido',items.length+' producto'+(items.length===1?'':'s')+' ('+n+' unidades) · '+money(total))}
+async function probarAviso(){const b=$('#ntfyBtn');if(b){b.disabled=true;b.textContent='Enviando…'}const ok=await ntfy('🛒 Prueba de aviso','Si ves esto en el teléfono, los avisos de pedidos ya funcionan.');if(b){b.disabled=false;b.textContent='Enviar aviso de prueba'}toast(ok?'Enviado: mirá el teléfono':'No se pudo enviar. Revisá tu internet')}
+function avisosCard(){return `<div class="card"><h3 style="margin:0 0 6px">🔔 Avisos de pedidos al teléfono</h3>
+  <p class="muted" style="margin:0 0 8px">Cuando un cliente envía un pedido te suena el teléfono, aunque la app esté cerrada. Es gratis.</p>
+  <ol style="margin:0 0 10px;padding-left:20px;line-height:1.5"><li>Instalá la app <b>ntfy</b> en el teléfono (Play Store o App Store).</li><li>Tocá <b>+</b> y suscribite al tema:<br><b style="color:var(--yel);user-select:all;overflow-wrap:anywhere">${NTFY_TOPIC}</b></li><li>Permití las notificaciones y tocá el botón de abajo.</li></ol>
+  <button class="btn" id="ntfyBtn" style="width:100%" onclick="probarAviso()">Enviar aviso de prueba</button>
+  <p class="muted" style="font-size:12px;margin:8px 0 0">El aviso dice solo cuántos productos y el total; los datos del cliente no se envían. No compartas el nombre del tema.</p></div>`}
 function seguridadCard(){
   return `<div class="card"><h3 style="margin:0 0 6px">🔒 Cuenta de administrador</h3><p class="muted" style="margin:0 0 10px">Entraste como administrador. El margen, los precios y los productos que cambies acá se actualizan solos en todos los equipos y en los clientes.</p><div class="row"><button class="btn sec sm" onclick="openCambiarPw()">Cambiar contraseña</button><button class="btn sec sm" onclick="logout()">Cerrar sesión</button></div></div>`;
 }
@@ -965,6 +979,7 @@ async function enviarPedido(){
   const txt=`Hola SHR Garage & Tools, soy ${CLIENT.nombre} (usuario ${CLIENT.usuario}). Quiero hacer este pedido:\n`+items.map(i=>`• ${i.q} x ${i.n} (cód. ${i.c}) — ${money(i.p*i.q)}`).join('\n')+`\nTotal: ${money(total)}`+(note?`\nNota: ${note}`:'');
   let ok=true;
   try{await X.add('ventas',{uid:CLIENT.uid,usuario:CLIENT.usuario,nombre:CLIENT.nombre,tel:CLIENT.tel,tipo:'pedido',estado:'nuevo',fecha:new Date().toISOString(),items,total,nota:note})}catch(e){ok=false}
+  if(ok)avisarPedido(items,total);
   S.cart=[];save();renderCartBar();
   modal(`<h2>${ok?'✅ Pedido guardado':'⚠️ No se pudo guardar el pedido'}</h2><p>${ok?'Ahora mandáselo a Ema por WhatsApp para coordinar.':'Igual podés mandarlo por WhatsApp.'}</p><a target="_blank" rel="noopener" href="https://wa.me/${WA_NUM}?text=${encodeURIComponent(txt)}" style="display:block;text-align:center;text-decoration:none;background:#25d366;color:#06361a;font-weight:800;border-radius:10px;padding:14px;text-transform:uppercase">Enviar por WhatsApp</a><div class="row" style="margin-top:10px"><button class="btn sec" style="flex:1" onclick="closeModal();render()">Cerrar</button></div>`);
 }
