@@ -169,7 +169,7 @@ nav button.on b{animation:pop .35s ease}
 <div id="printHost" style="display:none"></div>
 
 <script>
-const APP_VERSION='2.14.1';
+const APP_VERSION='2.15.0';
 const WA_NUM='5491165366884',WA_TXT='Hola SHR Garage & Tools, quería consultar por un producto.';
 /* Configuración fija del negocio (igual en todos los equipos). Se completa al publicar la app. */
 const FIXED=null;
@@ -314,7 +314,7 @@ function renderCartBar(){
 /* ---------- vistas ---------- */
 let tab='vender',qVender='',qProd='';
 function nav(){
-  const nPed=VENTAS_C.filter(v=>v.tipo==='pedido'&&v.estado==='nuevo').length;
+  const nPed=VENTAS_C.filter(sinVer).length;
   const T=ROLE==='admin'?[['vender','🛒','Vender'],['productos','🔩','Productos'],['clientes','👥','Clientes'+(nPed?' ('+nPed+')':'')],['ventas','🧾','Ventas'],['config','⚙️','Config']]
         :ROLE==='cliente'?[['vender','🛒','Catálogo'],['mis','🧾','Mis compras'],['cuenta','👤','Cuenta']]
         :ROLE==='invitado'?[['vender','🛒','Catálogo'],['in','🔑','Ingresar'],['reg','📝','Registrarme']]:[];
@@ -858,11 +858,24 @@ function startAdmin(){
 }
 /* aviso de pedidos nuevos al administrador (aunque el cliente no mande el WhatsApp) */
 let PED_SEEN=null;
+const sinVer=v=>v.tipo==='pedido'&&v.estado==='nuevo'&&(!v.vistoEn||(v.editadoPor==='cliente'&&!!v.editado&&v.editado>v.vistoEn));
+function marcarVisto(id){
+  const v=VENTAS_C.find(x=>x.id===id);if(!v||ROLE!=='admin'||!sinVer(v))return;
+  const t=new Date().toISOString();v.vistoEn=t;                         /* se actualiza ya, sin esperar a la nube */
+  if(X)X.update('ventas/'+id,{vistoEn:t}).catch(()=>{});
+  avisoPedidos();nav();
+}
+async function togglePasadoEG(id){
+  const v=VENTAS_C.find(x=>x.id===id);if(!v||ROLE!=='admin')return;
+  const val=v.pasadoEG?null:new Date().toISOString();
+  try{await X.update('ventas/'+id,{pasadoEG:val});v.pasadoEG=val;toast(val?'Marcado: pasado a EG Import Tool':'Quitada la marca');verCompra(id);if(tab==='clientes')vClientes()}
+  catch(e){toast('No pude guardar la marca')}
+}
 function avisoPedidos(){
-  const nuevos=VENTAS_C.filter(v=>v.tipo==='pedido'&&v.estado==='nuevo');
+  const nuevos=VENTAS_C.filter(v=>v.tipo==='pedido'&&v.estado==='nuevo'),sv=nuevos.filter(sinVer);
   const ids=new Set(nuevos.map(v=>v.id));
   const b=$('#pedBanner');
-  if(b){b.classList.toggle('on',ROLE==='admin'&&nuevos.length>0);b.innerHTML=nuevos.length?`<span>🔔 ${nuevos.length} pedido${nuevos.length>1?'s':''} nuevo${nuevos.length>1?'s':''} sin atender</span><button>Ver</button>`:''}
+  if(b){b.classList.toggle('on',ROLE==='admin'&&sv.length>0);b.innerHTML=sv.length?`<span>🔔 ${sv.length} pedido${sv.length>1?'s':''} nuevo${sv.length>1?'s':''} sin ver</span><button>Ver</button>`:''}
   if(PED_SEEN){
     const fresh=nuevos.filter(v=>!PED_SEEN.has(v.id));
     if(fresh.length){
@@ -991,11 +1004,13 @@ function vMis(){
 }
 function verCompra(id){
   const v=VENTAS_C.find(x=>x.id===id);if(!v)return;
-  modal(`<h2>${v.tipo==='pedido'?'Pedido':'Compra'} del ${new Date(v.fecha).toLocaleDateString('es-AR')}</h2>${v.nombre&&ROLE==='admin'?`<div class="muted">${esc(v.nombre)} · @${esc(v.usuario)}</div>`:''}<div class="muted" style="margin:4px 0 8px">${esc(estTxt(v))}${v.pago?' · '+esc(v.pago):''}</div>${v.items.map(i=>`<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><span style="flex:1">${i.q} × ${esc(i.n)}<br><small class="muted">Cód. ${esc(i.c)}</small></span><b>${money(i.p*i.q)}</b></div>`).join('')}${v.desc?`<div class="muted" style="margin-top:6px">Descuento ${v.desc}%</div>`:''}<div class="tot"><span>Total</span><span>${money(v.total)}</span></div>${v.nota?`<div class="muted">Nota: ${esc(v.nota)}</div>`:''}${v.editado?`<div class="muted" style="margin-top:4px">✎ Editado el ${fmtF(v.editado)} por ${v.editadoPor==='admin'?'el comercio':'el cliente'}</div>`:''}<div class="row" style="margin-top:10px">${editable(v)?`<button class="btn" onclick="abrirEditor('${esc(v.id)}')">✎ Editar pedido</button>`:''}${(ROLE==='admin'||(v.tipo==='pedido'&&(v.estado==='nuevo'||v.estado==='cancelado')))?`<button class="btn bad" onclick="delPedido('${esc(v.id)}')">🗑 Eliminar</button>`:''}<button class="btn sec" style="flex:1" onclick="closeModal()">Cerrar</button></div><div style="margin-top:8px"><button class="btn sec sm" style="width:100%" onclick="csvCompra('${esc(v.id)}')">⬇️ Descargar CSV con códigos</button></div>`);
+  if(ROLE==='admin')marcarVisto(id);
+  modal(`<h2>${v.tipo==='pedido'?'Pedido':'Compra'} del ${new Date(v.fecha).toLocaleDateString('es-AR')}</h2>${v.nombre&&ROLE==='admin'?`<div class="muted">${esc(v.nombre)} · @${esc(v.usuario)}</div>`:''}<div class="muted" style="margin:4px 0 8px">${esc(estTxt(v))}${v.pago?' · '+esc(v.pago):''}${ROLE==='admin'&&v.pasadoEG?' · <b style="color:var(--ok)">✅ Pasado a EG Import Tool ('+fmtF(v.pasadoEG)+')</b>':''}</div>${v.items.map(i=>`<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><span style="flex:1">${i.q} × ${esc(i.n)}<br><small class="muted">Cód. ${esc(i.c)}</small></span><b>${money(i.p*i.q)}</b></div>`).join('')}${v.desc?`<div class="muted" style="margin-top:6px">Descuento ${v.desc}%</div>`:''}<div class="tot"><span>Total</span><span>${money(v.total)}</span></div>${v.nota?`<div class="muted">Nota: ${esc(v.nota)}</div>`:''}${v.editado?`<div class="muted" style="margin-top:4px">✎ Editado el ${fmtF(v.editado)} por ${v.editadoPor==='admin'?'el comercio':'el cliente'}</div>`:''}<div class="row" style="margin-top:10px">${editable(v)?`<button class="btn" onclick="abrirEditor('${esc(v.id)}')">✎ Editar pedido</button>`:''}${(ROLE==='admin'||(v.tipo==='pedido'&&(v.estado==='nuevo'||v.estado==='cancelado')))?`<button class="btn bad" onclick="delPedido('${esc(v.id)}')">🗑 Eliminar</button>`:''}<button class="btn sec" style="flex:1" onclick="closeModal()">Cerrar</button></div>${ROLE==='admin'&&v.tipo==='pedido'?`<div style="margin-top:8px"><button class="btn ${v.pasadoEG?'sec':''}" style="width:100%" onclick="togglePasadoEG('${esc(v.id)}')">${v.pasadoEG?'✅ Pasado a EG Import Tool · tocá para deshacer':'📤 Pedido pasado a EG Import Tool'}</button></div>`:''}<div style="margin-top:8px"><button class="btn sec sm" style="width:100%" onclick="csvCompra('${esc(v.id)}')">⬇️ Descargar CSV con códigos</button></div>`);
 }
 /* ---------- editar un pedido (cliente y administrador) ---------- */
 function abrirEditor(id){
   const v=VENTAS_C.find(x=>x.id===id);
+  if(v&&ROLE==='admin')marcarVisto(id);
   if(!editable(v)){toast('Este pedido ya no se puede editar');return}
   ED={id,uid:v.uid,items:v.items.map(i=>({c:i.c,n:i.n,q:i.q,p:i.p})),cli:CLIENTES.find(c=>c.id===v.uid)||null};
   modal(`<h2>Editar pedido</h2>${ROLE==='admin'?`<div class="muted">${esc(v.nombre)} · @${esc(v.usuario)}</div>`:'<div class="muted">Podés cambiar cantidades, sacar o agregar productos mientras Ema no lo haya preparado.</div>'}
@@ -1058,7 +1073,7 @@ function vClientes(){
 }
 function pedidoRow(v){
   const nuevo=v.estado==='nuevo';
-  return `<div style="border-top:1px solid var(--line);padding:8px 0"><div class="row"><span style="flex:1"><b>${new Date(v.fecha).toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'})}</b> <span class="tag ${v.estado==='entregado'?'ok':''}">${esc(estTxt(v))}</span></span><b style="color:var(--yel)">${money(v.total)}</b></div>
+  return `<div style="border-top:1px solid var(--line);padding:8px 0"><div class="row"><span style="flex:1"><b>${new Date(v.fecha).toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'})}</b> <span class="tag ${v.estado==='entregado'?'ok':''}">${esc(estTxt(v))}</span>${sinVer(v)?' <span class="tag new">sin ver</span>':''}${v.pasadoEG?' <span class="tag ok">EG Import Tool</span>':''}</span><b style="color:var(--yel)">${money(v.total)}</b></div>
   <div class="muted" style="margin:2px 0 6px">${v.items.map(i=>i.q+'× '+esc(i.n)+' <b>['+esc(i.c)+']</b>').slice(0,3).join(' · ')}${v.items.length>3?' · +'+(v.items.length-3)+' más':''}${v.nota?' — “'+esc(v.nota)+'”':''}</div>
   <div class="row" style="flex-wrap:wrap"><button class="btn sec sm" onclick="verCompra('${esc(v.id)}')">Ver</button>${nuevo?`<button class="btn sm" onclick="abrirEditor('${esc(v.id)}')">✎ Editar</button><button class="btn sec sm" onclick="setEstado('${esc(v.id)}','entregado')">Entregado</button><button class="btn bad sm" onclick="setEstado('${esc(v.id)}','cancelado')">Cancelar</button>`:''}<button class="btn bad sm" onclick="delPedido('${esc(v.id)}')">🗑 Eliminar</button></div></div>`;
 }
