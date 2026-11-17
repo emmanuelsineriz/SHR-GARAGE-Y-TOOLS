@@ -169,7 +169,7 @@ nav button.on b{animation:pop .35s ease}
 <div id="printHost" style="display:none"></div>
 
 <script>
-const APP_VERSION='2.15.0';
+const APP_VERSION='2.16.0';
 const WA_NUM='5491165366884',WA_TXT='Hola SHR Garage & Tools, quería consultar por un producto.';
 /* Configuración fija del negocio (igual en todos los equipos). Se completa al publicar la app. */
 const FIXED=null;
@@ -772,6 +772,79 @@ function seguridadCard(){
 }
 
 /* ---------- datos ---------- */
+
+/* PDF-START */
+/* ---------- PDF de un pedido, armado dentro de la app (sin librerías ni servicios externos) ---------- */
+const PDFW=[278,278,355,556,556,889,667,191,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,278,278,584,584,584,556,1015,667,667,722,722,667,611,778,722,278,500,667,556,833,722,778,667,778,722,667,611,722,667,944,667,667,611,278,278,278,469,556,333,556,556,500,556,556,278,556,556,222,222,500,222,833,556,556,556,556,333,500,278,556,500,722,500,500,500,334,260,334,584];
+const PDFX={'€':128,'‘':145,'’':146,'“':147,'”':148,'•':149,'–':150,'—':151};
+function pdfCh(c){const k=c.charCodeAt(0);if(PDFX[c])return PDFX[c];if(k>=32&&k<=255)return k;return 63}
+function pdfStr(t){return String(t==null?'':t).replace(/[\r\n\t]+/g,' ').split('').map(c=>{const k=pdfCh(c);const ch=String.fromCharCode(k);return ch==='\\'||ch==='('||ch===')'?'\\'+ch:ch}).join('')}
+function pdfW(t,size,bold){let w=0;for(const c of String(t)){const k=c.charCodeAt(0);let u=k;if(k>126||k<32){const b=c.normalize('NFD')[0].charCodeAt(0);u=(b>=32&&b<=126)?b:77}w+=PDFW[u-32]||556}return w*size/1000*(bold?1.06:1)}
+function pdfWrap(t,size,maxW,bold){
+  const out=[];let cur='';
+  String(t==null?'':t).split(/\s+/).filter(Boolean).forEach(w=>{
+    while(pdfW(w,size,bold)>maxW){let i=w.length;while(i>1&&pdfW(w.slice(0,i),size,bold)>maxW)i--;if(cur){out.push(cur);cur=''}out.push(w.slice(0,i));w=w.slice(i)}
+    const t2=cur?cur+' '+w:w;if(pdfW(t2,size,bold)<=maxW)cur=t2;else{out.push(cur);cur=w}
+  });
+  if(cur)out.push(cur);return out.length?out:[''];
+}
+function pedidoPdf(v,neg){
+  const W=595,H=842,M=40,pages=[];let ops=[],y=0;
+  const T=(x,yy,t,sz,b,al)=>{let xx=x;if(al==='r')xx=x-pdfW(t,sz,b);ops.push(`BT /${b?'F2':'F1'} ${sz} Tf ${xx.toFixed(1)} ${yy.toFixed(1)} Td (${pdfStr(t)}) Tj ET`)};
+  const L=(x1,y1,x2,y2,g)=>ops.push(`${g||0.7} G 0.6 w ${x1} ${y1} m ${x2} ${y2} l S`);
+  const R=(x,yy,w,h,g)=>ops.push(`${g} g ${x} ${yy} ${w} ${h} re f 0 g`);
+  const nuevaPag=()=>{if(ops.length)pages.push(ops.join('\n'));ops=[];y=H-M};
+  const colHead=()=>{R(M,y-14,W-2*M,18,0.9);T(M+4,y-9,'Código',9,1);T(M+66,y-9,'Producto',9,1);T(M+345,y-9,'Cant.',9,1,'r');T(M+425,y-9,'Precio unit.',9,1,'r');T(W-M-4,y-9,'Subtotal',9,1,'r');y-=22};
+  nuevaPag();
+  T(M,y-14,neg||'SHR Garage & Tools',16,1);T(W-M,y-14,'PEDIDO PARA PREPARAR',11,1,'r');y-=24;
+  T(W-M,y-2,'Pedido del '+new Date(v.fecha).toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'}),9,0,'r');y-=8;L(M,y,W-M,y,0.2);y-=16;
+  const dato=(k,val)=>{if(!val)return;T(M,y,k,10,1);pdfWrap(val,10,W-2*M-90).forEach((ln,i)=>{T(M+90,y,ln,10,0);y-=14})};
+  dato('Cliente:',(v.nombre||'')+(v.usuario?'  (@'+v.usuario+')':''));
+  dato('Teléfono:',v.tel);
+  dato('Estado:','En preparación'+(v.preparacionEn?' desde '+new Date(v.preparacionEn).toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'}):''));
+  dato('Nota del cliente:',v.nota);
+  if(v.pasadoEG)dato('EG Import Tool:','Pasado el '+new Date(v.pasadoEG).toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'}));
+  y-=6;
+  const items=v.items||[],unid=items.reduce((a,i)=>a+(+i.q||0),0);
+  T(M,y,items.length+' producto'+(items.length===1?'':'s')+' · '+unid+' unidades',10,1);y-=12;
+  colHead();
+  items.forEach(i=>{
+    const lines=pdfWrap(i.n,9,262),h=lines.length*11+6;
+    if(y-h<70){nuevaPag();colHead()}
+    T(M+4,y-8,i.c,9,1);lines.forEach((ln,k)=>T(M+66,y-8-k*11,ln,9,0));
+    T(M+345,y-8,String(i.q),9,0,'r');T(M+425,y-8,money(i.p),9,0,'r');T(W-M-4,y-8,money((i.q||0)*(i.p||0)),9,0,'r');
+    y-=h;L(M,y+2,W-M,y+2,0.85);
+  });
+  if(y<110)nuevaPag();
+  y-=8;
+  if(v.desc){T(W-M-4,y-8,'Descuento '+v.desc+'%',10,0,'r');y-=16}
+  T(W-M-110,y-12,'TOTAL',13,1,'r');T(W-M-4,y-12,money(v.total),13,1,'r');y-=34;
+  T(M,y,'Generado el '+new Date().toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'})+' desde la app.',8,0);
+  pages.push(ops.join('\n'));
+  /* ensamblado del archivo PDF */
+  const n=pages.length,objs=[];
+  objs[1]='<< /Type /Catalog /Pages 2 0 R >>';
+  objs[2]='<< /Type /Pages /Kids ['+pages.map((_,i)=>(5+i*2)+' 0 R').join(' ')+'] /Count '+n+' >>';
+  objs[3]='<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>';
+  objs[4]='<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>';
+  pages.forEach((c,i)=>{
+    const foot=`BT /F1 8 Tf ${W-M-60} 24 Td (${pdfStr('Página '+(i+1)+' de '+n)}) Tj ET`,body=c+'\n'+foot;
+    objs[5+i*2]=`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${6+i*2} 0 R >>`;
+    objs[6+i*2]=`<< /Length ${body.length} >>\nstream\n${body}\nendstream`;
+  });
+  let out='%PDF-1.4\n';const off=[];
+  for(let i=1;i<objs.length;i++){off[i]=out.length;out+=i+' 0 obj\n'+objs[i]+'\nendobj\n'}
+  const xr=out.length;out+='xref\n0 '+objs.length+'\n0000000000 65535 f \n'+off.slice(1).map(o=>String(o).padStart(10,'0')+' 00000 n \n').join('');
+  out+='trailer\n<< /Size '+objs.length+' /Root 1 0 R >>\nstartxref\n'+xr+'\n%%EOF';
+  const u=new Uint8Array(out.length);for(let i=0;i<out.length;i++)u[i]=out.charCodeAt(i)&255;return u;
+}
+function pdfNombre(v){return 'pedido_'+new Date(v.fecha).toISOString().slice(0,10)+(v.usuario?'_'+v.usuario:'')+'.pdf'}
+function bajarPdf(v){
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([pedidoPdf(v,S.cfg.nombre)],{type:'application/pdf'}));a.download=pdfNombre(v);
+  document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},4000);
+}
+function pdfCompra(id){const v=VENTAS_C.find(x=>x.id===id);if(v)bajarPdf(v)}
+/* PDF-END */
 function csvDe(items,extra){
   const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';const d=v=>String(v==null?'':v).replace('.',',');
   const L=['Código;Producto;Cantidad;Precio unitario;Subtotal'];
@@ -996,7 +1069,7 @@ async function enviarPedido(){
   S.cart=[];save();renderCartBar();
   modal(`<h2>${ok?'✅ Pedido guardado':'⚠️ No se pudo guardar el pedido'}</h2><p>${ok?'Ahora mandáselo a Ema por WhatsApp para coordinar.':'Igual podés mandarlo por WhatsApp.'}</p><a target="_blank" rel="noopener" href="https://wa.me/${WA_NUM}?text=${encodeURIComponent(txt)}" style="display:block;text-align:center;text-decoration:none;background:#25d366;color:#06361a;font-weight:800;border-radius:10px;padding:14px;text-transform:uppercase">Enviar por WhatsApp</a><div class="row" style="margin-top:10px"><button class="btn sec" style="flex:1" onclick="closeModal();render()">Cerrar</button></div>`);
 }
-const estTxt=v=>(v.estado==='anulada'?'Anulada':v.tipo==='pedido'?({nuevo:'Pedido enviado',entregado:'Entregado',cancelado:'Cancelado'}[v.estado]||v.estado):'Compra')+(v.editado?' ✎':'');
+const estTxt=v=>(v.estado==='anulada'?'Anulada':v.tipo==='pedido'?({nuevo:'Pedido enviado',preparacion:'En preparación',entregado:'Entregado',cancelado:'Cancelado'}[v.estado]||v.estado):'Compra')+(v.editado?' ✎':'');
 const editable=v=>!!v&&v.tipo==='pedido'&&v.estado==='nuevo'&&(ROLE==='cliente'||ROLE==='admin');
 function vMis(){
   const L=VENTAS_C;
@@ -1005,7 +1078,7 @@ function vMis(){
 function verCompra(id){
   const v=VENTAS_C.find(x=>x.id===id);if(!v)return;
   if(ROLE==='admin')marcarVisto(id);
-  modal(`<h2>${v.tipo==='pedido'?'Pedido':'Compra'} del ${new Date(v.fecha).toLocaleDateString('es-AR')}</h2>${v.nombre&&ROLE==='admin'?`<div class="muted">${esc(v.nombre)} · @${esc(v.usuario)}</div>`:''}<div class="muted" style="margin:4px 0 8px">${esc(estTxt(v))}${v.pago?' · '+esc(v.pago):''}${ROLE==='admin'&&v.pasadoEG?' · <b style="color:var(--ok)">✅ Pasado a EG Import Tool ('+fmtF(v.pasadoEG)+')</b>':''}</div>${v.items.map(i=>`<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><span style="flex:1">${i.q} × ${esc(i.n)}<br><small class="muted">Cód. ${esc(i.c)}</small></span><b>${money(i.p*i.q)}</b></div>`).join('')}${v.desc?`<div class="muted" style="margin-top:6px">Descuento ${v.desc}%</div>`:''}<div class="tot"><span>Total</span><span>${money(v.total)}</span></div>${v.nota?`<div class="muted">Nota: ${esc(v.nota)}</div>`:''}${v.editado?`<div class="muted" style="margin-top:4px">✎ Editado el ${fmtF(v.editado)} por ${v.editadoPor==='admin'?'el comercio':'el cliente'}</div>`:''}<div class="row" style="margin-top:10px">${editable(v)?`<button class="btn" onclick="abrirEditor('${esc(v.id)}')">✎ Editar pedido</button>`:''}${(ROLE==='admin'||(v.tipo==='pedido'&&(v.estado==='nuevo'||v.estado==='cancelado')))?`<button class="btn bad" onclick="delPedido('${esc(v.id)}')">🗑 Eliminar</button>`:''}<button class="btn sec" style="flex:1" onclick="closeModal()">Cerrar</button></div>${ROLE==='admin'&&v.tipo==='pedido'?`<div style="margin-top:8px"><button class="btn ${v.pasadoEG?'sec':''}" style="width:100%" onclick="togglePasadoEG('${esc(v.id)}')">${v.pasadoEG?'✅ Pasado a EG Import Tool · tocá para deshacer':'📤 Pedido pasado a EG Import Tool'}</button></div>`:''}<div style="margin-top:8px"><button class="btn sec sm" style="width:100%" onclick="csvCompra('${esc(v.id)}')">⬇️ Descargar CSV con códigos</button></div>`);
+  modal(`<h2>${v.tipo==='pedido'?'Pedido':'Compra'} del ${new Date(v.fecha).toLocaleDateString('es-AR')}</h2>${v.nombre&&ROLE==='admin'?`<div class="muted">${esc(v.nombre)} · @${esc(v.usuario)}</div>`:''}<div class="muted" style="margin:4px 0 8px">${esc(estTxt(v))}${v.pago?' · '+esc(v.pago):''}${ROLE==='admin'&&v.pasadoEG?' · <b style="color:var(--ok)">✅ Pasado a EG Import Tool ('+fmtF(v.pasadoEG)+')</b>':''}</div>${v.items.map(i=>`<div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)"><span style="flex:1">${i.q} × ${esc(i.n)}<br><small class="muted">Cód. ${esc(i.c)}</small></span><b>${money(i.p*i.q)}</b></div>`).join('')}${v.desc?`<div class="muted" style="margin-top:6px">Descuento ${v.desc}%</div>`:''}<div class="tot"><span>Total</span><span>${money(v.total)}</span></div>${ROLE==='cliente'&&v.tipo==='pedido'&&v.estado==='preparacion'?'<div class="card" style="border-color:var(--yel)">🧰 Tu pedido ya se está preparando, por eso no se puede modificar. Si necesitás un cambio, escribinos por WhatsApp.</div>':''}${v.nota?`<div class="muted">Nota: ${esc(v.nota)}</div>`:''}${v.editado?`<div class="muted" style="margin-top:4px">✎ Editado el ${fmtF(v.editado)} por ${v.editadoPor==='admin'?'el comercio':'el cliente'}</div>`:''}<div class="row" style="margin-top:10px">${editable(v)?`<button class="btn" onclick="abrirEditor('${esc(v.id)}')">✎ Editar pedido</button>`:''}${(ROLE==='admin'||(v.tipo==='pedido'&&(v.estado==='nuevo'||v.estado==='cancelado')))?`<button class="btn bad" onclick="delPedido('${esc(v.id)}')">🗑 Eliminar</button>`:''}<button class="btn sec" style="flex:1" onclick="closeModal()">Cerrar</button></div>${ROLE==='admin'&&v.tipo==='pedido'&&v.estado==='nuevo'?`<div style="margin-top:8px"><button class="btn" style="width:100%" onclick="closeModal();pasarPreparacion('${esc(v.id)}')">🧰 Pasar a preparación (baja el PDF)</button></div>`:''}${ROLE==='admin'&&v.tipo==='pedido'&&v.estado==='preparacion'?`<div style="margin-top:8px"><button class="btn sec" style="width:100%" onclick="pdfCompra('${esc(v.id)}')">⬇️ Descargar PDF del pedido</button></div>`:''}${ROLE==='admin'&&v.tipo==='pedido'?`<div style="margin-top:8px"><button class="btn ${v.pasadoEG?'sec':''}" style="width:100%" onclick="togglePasadoEG('${esc(v.id)}')">${v.pasadoEG?'✅ Pasado a EG Import Tool · tocá para deshacer':'📤 Pedido pasado a EG Import Tool'}</button></div>`:''}<div style="margin-top:8px"><button class="btn sec sm" style="width:100%" onclick="csvCompra('${esc(v.id)}')">⬇️ Descargar CSV con códigos</button></div>`);
 }
 /* ---------- editar un pedido (cliente y administrador) ---------- */
 function abrirEditor(id){
@@ -1044,7 +1117,7 @@ async function edGuardar(){
   if(!ED.items.length){toast('El pedido quedó vacío. Si no lo querés, tocá "Cancelar este pedido".');return}
   const total=ED.items.reduce((a,l)=>a+l.q*l.p,0),nota=$('#edNota').value.trim();
   try{await X.update('ventas/'+ED.id,{items:ED.items.map(({c,n,q,p})=>({c,n,q,p})),total,nota,editado:new Date().toISOString(),editadoPor:ROLE});closeModal();render();toast('Pedido actualizado')}
-  catch(e){toast('No pude guardar. Puede que el pedido ya esté entregado o cancelado.')}
+  catch(e){toast('No pude guardar. Puede que ya se esté preparando, o que esté entregado o cancelado.')}
 }
 function edCancelar(){ask('¿Cancelar este pedido?','Sí, cancelar',edCancelar_,true)}
 async function edCancelar_(){
@@ -1075,7 +1148,7 @@ function pedidoRow(v){
   const nuevo=v.estado==='nuevo';
   return `<div style="border-top:1px solid var(--line);padding:8px 0"><div class="row"><span style="flex:1"><b>${new Date(v.fecha).toLocaleString('es-AR',{dateStyle:'short',timeStyle:'short'})}</b> <span class="tag ${v.estado==='entregado'?'ok':''}">${esc(estTxt(v))}</span>${sinVer(v)?' <span class="tag new">sin ver</span>':''}${v.pasadoEG?' <span class="tag ok">EG Import Tool</span>':''}</span><b style="color:var(--yel)">${money(v.total)}</b></div>
   <div class="muted" style="margin:2px 0 6px">${v.items.map(i=>i.q+'× '+esc(i.n)+' <b>['+esc(i.c)+']</b>').slice(0,3).join(' · ')}${v.items.length>3?' · +'+(v.items.length-3)+' más':''}${v.nota?' — “'+esc(v.nota)+'”':''}</div>
-  <div class="row" style="flex-wrap:wrap"><button class="btn sec sm" onclick="verCompra('${esc(v.id)}')">Ver</button>${nuevo?`<button class="btn sm" onclick="abrirEditor('${esc(v.id)}')">✎ Editar</button><button class="btn sec sm" onclick="setEstado('${esc(v.id)}','entregado')">Entregado</button><button class="btn bad sm" onclick="setEstado('${esc(v.id)}','cancelado')">Cancelar</button>`:''}<button class="btn bad sm" onclick="delPedido('${esc(v.id)}')">🗑 Eliminar</button></div></div>`;
+  <div class="row" style="flex-wrap:wrap"><button class="btn sec sm" onclick="verCompra('${esc(v.id)}')">Ver</button>${nuevo?`<button class="btn sm" onclick="abrirEditor('${esc(v.id)}')">✎ Editar</button><button class="btn sm" onclick="pasarPreparacion('${esc(v.id)}')">🧰 En preparación</button><button class="btn sec sm" onclick="setEstado('${esc(v.id)}','entregado')">Entregado</button><button class="btn bad sm" onclick="setEstado('${esc(v.id)}','cancelado')">Cancelar</button>`:''}${v.estado==='preparacion'?`<button class="btn sec sm" onclick="pdfCompra('${esc(v.id)}')">⬇️ PDF</button><button class="btn sec sm" onclick="setEstado('${esc(v.id)}','entregado')">Entregado</button><button class="btn sec sm" onclick="volverANuevo('${esc(v.id)}')">↩ Volver a nuevo</button><button class="btn bad sm" onclick="setEstado('${esc(v.id)}','cancelado')">Cancelar</button>`:''}<button class="btn bad sm" onclick="delPedido('${esc(v.id)}')">🗑 Eliminar</button></div></div>`;
 }
 function pintarCli(){
   const t=termsOf(qCli),G=gruposClientes().filter(g=>{const h=norm(g.c.nombre+' '+g.c.usuario+' '+g.c.tel);return t.every(x=>h.includes(x))});
@@ -1112,6 +1185,22 @@ function delPedido(id){
   if(ROLE!=='admin'&&!(v.tipo==='pedido'&&(v.estado==='nuevo'||v.estado==='cancelado'))){toast('Este pedido ya no se puede eliminar');return}
   ask('¿Eliminar este pedido del '+new Date(v.fecha).toLocaleDateString('es-AR')+' ('+money(v.total)+')?\nNo se puede deshacer.','Eliminar',async()=>{
     try{await X.batchDel(['ventas/'+id]);closeModal();toast('Pedido eliminado')}catch(e){toast('No pude eliminar el pedido')}},true);
+}
+function pasarPreparacion(id){
+  const v=VENTAS_C.find(x=>x.id===id);if(!v||ROLE!=='admin')return;
+  ask('¿Pasar este pedido a preparación?\n\nEl cliente ya no va a poder modificarlo ni cancelarlo. Se baja el PDF a tus Descargas.','Sí, pasar a preparación',async()=>{
+    const t=new Date().toISOString();
+    try{
+      await X.update('ventas/'+id,{estado:'preparacion',preparacionEn:t,vistoEn:v.vistoEn||t});
+      v.estado='preparacion';v.preparacionEn=t;if(!v.vistoEn)v.vistoEn=t;
+      try{bajarPdf(v);toast('En preparación · PDF descargado')}catch(e){toast('En preparación (no pude armar el PDF, bajalo con el botón PDF)')}
+      avisoPedidos();nav();if(tab==='clientes')vClientes()
+    }catch(e){toast('No pude pasarlo a preparación')}
+  });
+}
+async function volverANuevo(id){
+  const v=VENTAS_C.find(x=>x.id===id);if(!v||ROLE!=='admin')return;
+  try{await X.update('ventas/'+id,{estado:'nuevo'});v.estado='nuevo';toast('Vuelve a "nuevo": el cliente puede modificarlo');avisoPedidos();nav();if(tab==='clientes')vClientes()}catch(e){toast('No pude guardar')}
 }
 async function setEstado(id,e){try{await X.update('ventas/'+id,{estado:e});toast(e==='entregado'?'Marcado como entregado':'Pedido cancelado')}catch(er){toast('No pude guardar')}}
 function verComprasCli(id){
