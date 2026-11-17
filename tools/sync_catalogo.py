@@ -66,6 +66,35 @@ def decodificar(resp):
     try:return b.decode('utf-8')
     except UnicodeDecodeError:return b.decode('cp1252',errors='replace')
 
+def diagnostico(html_text):
+    """Anota en el registro cómo está armado el menú de la página (enlaces con rub=, opciones, textos con 'novedad').
+    Solo imprime; no cambia nada. Sirve para encontrar el listado de Novedades de elgasolero.com."""
+    try:
+        soup=BeautifulSoup(html_text,'lxml') if _lxml() else BeautifulSoup(html_text,'html.parser')
+        print('DIAG título:',(soup.title.get_text(' ',strip=True) if soup.title else '')[:80])
+        vistos=set()
+        for a in soup.find_all('a',href=True):
+            t=a.get_text(' ',strip=True)[:50];h=a['href'][:100]
+            if ('rub=' in h or 'noved' in t.lower() or 'noved' in h.lower()) and (t,h) not in vistos:
+                vistos.add((t,h));print('DIAG enlace:',repr(t),'->',h)
+                if len(vistos)>=90:break
+        n=0
+        for o in soup.find_all('option'):
+            print('DIAG opción:',repr(o.get('value')),repr(o.get_text(' ',strip=True)[:50]));n+=1
+            if n>=90:break
+        for f in soup.find_all('form')[:6]:
+            print('DIAG form:',f.get('action'),f.get('method'),[ (i.get('name'),i.get('type')) for i in f.find_all(['input','select'])][:12])
+        rubs={}
+        for r in soup.select('p.rubro_centrado'):
+            k=r.get_text(' ',strip=True);rubs[k]=rubs.get(k,0)+1
+        print('DIAG rubros en la lista:',dict(list(rubs.items())[:40]))
+        k=0
+        for el in soup.find_all(string=lambda x:x and 'noved' in x.lower()):
+            par=el.parent;print('DIAG texto novedad:',par.name,dict(list(par.attrs.items())[:3]),repr(str(el).strip()[:80]));k+=1
+            if k>=8:break
+    except Exception as e:
+        print('DIAG error:',e)
+
 def falla(estado,msg):
     json.dump({'ok':False,'error':msg,'fecha':time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())},open(estado,'w',encoding='utf-8'),ensure_ascii=False)
     sys.exit('ERROR: '+msg)
@@ -86,6 +115,7 @@ def main():
         falla(estado,'No pude conectar con elgasolero.com: %s'%e)
     if 'No tienes acceso' in texto:
         falla(estado,'La clave de elgasolero.com ya no sirve. Hay que cargar la clave nueva en GitHub (secreto ELGASOLERO_CLAVE).')
+    diagnostico(texto)
     prods,seen=parse(texto)
     print(f'Leí {len(prods)} productos con precio ({seen} bloques).')
     if len(prods)<MIN_PRODUCTOS:falla(estado,f'Solo pude leer {len(prods)} productos: la página cambió o la clave no abrió el catálogo. No se actualizó nada.')
